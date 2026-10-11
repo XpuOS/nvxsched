@@ -8,6 +8,7 @@
 
 #include "xsched/utils.h"
 #include "xsched/xqueue.h"
+#include "xsched/preempt/xmem/xmem.h"
 #include "xsched/preempt/hal/hw_command.h"
 
 namespace xsched::preempt
@@ -55,6 +56,12 @@ public:
     virtual HwQueueHandle GetHandle() = 0;
     virtual bool SupportDynamicLevel() = 0;
     virtual XPreemptLevel GetMaxSupportedLevel() = 0;
+
+    /// @brief Get the XMemoryManager used by this HwQueue. The XMemoryManager is used to
+    /// schedule hardware (or device) memory across multiple XQueues.
+    /// See memory scheduling (https://arxiv.org/abs/2512.24637v1) for more details.
+    /// @return The XMemoryManager used by this HwQueue. nullptr if not supported.
+    virtual std::shared_ptr<XMemoryManager> GetXMemoryManager() { return nullptr; }
 
     /// @brief A callback function that will be called when the preemption level changes.
     /// @param level The new preemption level of the HwQueue.

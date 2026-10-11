@@ -23,6 +23,7 @@ public:
 private:
     static std::atomic_bool executing_;
     static void ExecuteSchedOperation(std::shared_ptr<const sched::SchedOperation> op);
+    static void ExecuteMemoryOperation(std::shared_ptr<const sched::MemoryOperation> op);
     static void ExecuteConfigOperation(std::shared_ptr<const sched::ConfigOperation> op);
 };
 

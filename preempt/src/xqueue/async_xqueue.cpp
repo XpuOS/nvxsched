@@ -8,16 +8,17 @@ using namespace xsched::sched;
 using namespace xsched::preempt;
 
 AsyncXQueue::AsyncXQueue(std::shared_ptr<HwQueue> hwq, XPreemptLevel level,
-                         int64_t threshold, int64_t batch_size)
+                         XMemoryContextType ctx_type, int64_t threshold, int64_t batch_size)
     : XQueue(kXQueueImplTypeAsync,
              kQueueFeatureAsyncSubmit      |
              (hwq->SupportDynamicLevel()   ? kQueueFeatureDynamicLevel : 0)  |
              kQueueFeatureDynamicThreshold | kQueueFeatureDynamicBatchSize   |
              kQueueFeatureSyncSuspend      | kQueueFeatureResumeDropCommands ,
              hwq)
-    , level_(level)
+    , level_(level), mem_ctx_type_(ctx_type)
     , cmd_buf_(std::make_shared<CommandBuffer>(kHandle))
     , launch_worker_(std::make_shared<LaunchWorker>(hwq, cmd_buf_, level, threshold, batch_size))
+    , xmm_(hwq->GetXMemoryManager())
 {
     XASSERT(level_ > kPreemptLevelUnknown && level_ < kPreemptLevelMax,
             "invalid preempt level: %d", level_);
@@ -46,6 +47,7 @@ void AsyncXQueue::Submit(std::shared_ptr<HwCommand> hw_cmd)
     hw_cmd->OnSubmit(shared_from_this());
     hw_cmd->SetIdx(next_hw_cmd_idx_.fetch_add(1));
     kHwQueue->OnHwCommandSubmit(hw_cmd);
+    hw_cmd->Predict(mem_ctx_type_, xmm_);
     cmd_buf_->Enqueue(hw_cmd);
     if (hw_cmd->GetProps(kCommandPropertyBlockingSubmit)) hw_cmd->WaitUntil(kCommandStateInFlight);
 }
@@ -149,6 +151,75 @@ void AsyncXQueue::Resume(int64_t flags)
     launch_worker_->ResumeAndDrop(drop_idx);
 }
 
+std::shared_ptr<MemorySet> AsyncXQueue::GetMemoryContext(uint64_t begin_ns, uint64_t end_ns)
+{
+    if (begin_ns >= end_ns) return nullptr;
+
+    uint64_t time = 0;
+    auto res = std::make_shared<MemorySet>();
+    // The last HwCommand idx that has been presented by the launch worker.
+    int64_t last_hw_cmd_idx = -1;
+    launch_worker_->ForEachCommand([&](std::shared_ptr<HwCommand> hw_cmd) -> bool {
+        // time is the beginning of the current command
+        if (time > end_ns) return false;
+
+        last_hw_cmd_idx = hw_cmd->GetIdx();
+        int64_t exec_time = hw_cmd->GetExecutionTimeNs();
+        if (exec_time > 0) time += exec_time;
+        // time is the end of current the command
+        if (time < begin_ns) return true;
+
+        std::shared_ptr<MemorySet> set = hw_cmd->GetMemoryContext();
+        if (set == nullptr) return true;
+        res->reads.Merge(set->reads);
+        res->writes.Merge(set->writes);
+        return true;
+    });
+
+    cmd_buf_->ForEachCommand([&](std::shared_ptr<XCommand> xcmd) -> bool {
+        // time is the beginning of the current command
+        if (time > end_ns) return false;
+
+        std::shared_ptr<HwCommand> hw_cmd = std::dynamic_pointer_cast<HwCommand>(xcmd);
+        if (hw_cmd == nullptr) return true;
+
+        // Skip HwCommands that have been presented by the launch worker.
+        if (hw_cmd->GetIdx() <= last_hw_cmd_idx) return true;
+        int64_t exec_time = hw_cmd->GetExecutionTimeNs();
+        if (exec_time > 0) time += exec_time;
+        // time is the end of current the command
+        if (time < begin_ns) return true;
+
+        std::shared_ptr<MemorySet> set = hw_cmd->GetMemoryContext();
+        if (set == nullptr) return true;
+        res->reads.Merge(set->reads);
+        res->writes.Merge(set->writes);
+        return true;
+    });
+
+    return res;
+}
+
+void AsyncXQueue::AdviseMemory(XMemoryAdviseType advise, uint64_t begin_ns, uint64_t end_ns)
+{
+    if (xmm_ == nullptr) return;
+    if (mem_ctx_type_ <= kMemoryContextNone) return;
+
+    std::shared_ptr<Region> mem = xmm_->GetAllocatedMemory();
+    if (mem_ctx_type_ == kMemoryContextFull) {
+        // Use full memory allocation as context.
+        xmm_->Advise(mem, advise);
+        return;
+    }
+
+    auto ctx = this->GetMemoryContext(begin_ns, end_ns);
+    if (ctx == nullptr) return;
+    Region &region = ctx->reads;
+    region.Merge(ctx->writes);
+    mem->Intersect(region);
+    xmm_->Advise(mem, advise);
+}
+
 void AsyncXQueue::SetPreemptLevel(XPreemptLevel level)
 {
     XASSERT(level > kPreemptLevelUnknown && level < kPreemptLevelMax,
@@ -171,6 +242,16 @@ void AsyncXQueue::SetPreemptLevel(XPreemptLevel level)
     level_ = level;
     SchedAgent::SendEvent(std::make_shared<XQueueConfigUpdateEvent>(kHandle, kDevice, level_,
         launch_worker_->GetThreshold(), launch_worker_->GetBatchSize()));
+}
+
+void AsyncXQueue::SetMemoryContextType(XMemoryContextType ctx_type)
+{
+    XASSERT(ctx_type > kMemoryContextUnknown && ctx_type < kMemoryContextMax,
+            "invalid memory context type: %d", ctx_type);
+    // Not thread-safe (with Submit).
+    // TODO: change to thread-safe
+    this->WaitAll();
+    mem_ctx_type_ = ctx_type;
 }
 
 void AsyncXQueue::SetLaunchConfig(int64_t threshold, int64_t batch_size)

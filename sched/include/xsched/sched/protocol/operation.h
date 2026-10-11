@@ -17,6 +17,7 @@ enum OperationType
     kOperationNone      = 0,
     kOperationTerminate = 1,
     kOperationSched     = 2,
+    kOperationMemory    = 3,
     kOperationConfig    = 4,
 };
 
@@ -99,6 +100,40 @@ private:
         /// The handles are first running_cnt running xqueues, then 
         /// suspended_cnt suspended xqueues.
         XQueueHandle handles[64];
+    };
+
+    const OperationData *data_ = nullptr;
+};
+
+/// @brief Advise memory for the commands that will be executed by the given XQueue within
+/// a specified time period (from PeriodBeginNs() to PeriodEndNs(), both in nanoseconds).
+class MemoryOperation : public Operation
+{
+public:
+    MemoryOperation(const void *data);
+    MemoryOperation(OperationId id, PID pid, XQueueHandle handle, XMemoryAdviseType advise_type,
+                    uint64_t period_begin_ns, uint64_t period_end_ns);
+    virtual ~MemoryOperation();
+
+    virtual const void *  Data() const override { return data_; }
+    virtual size_t        Size() const override { return sizeof(OperationData); }
+    virtual OperationId   Id()   const override { return data_->meta.id; }
+    virtual OperationType Type() const override { return kOperationMemory; }
+    virtual PID           Pid()  const override { return data_->meta.pid; }
+
+    XQueueHandle      Handle()        const { return data_->handle; }
+    XMemoryAdviseType AdviseType()    const { return data_->advise_type; }
+    uint64_t          PeriodBeginNs() const { return data_->period_begin_ns; }
+    uint64_t          PeriodEndNs()   const { return data_->period_end_ns; }
+
+private:
+    struct OperationData
+    {
+        OperationMeta     meta;
+        XQueueHandle      handle;
+        XMemoryAdviseType advise_type;
+        uint64_t          period_begin_ns;
+        uint64_t          period_end_ns;
     };
 
     const OperationData *data_ = nullptr;

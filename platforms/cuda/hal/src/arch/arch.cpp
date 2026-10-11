@@ -60,6 +60,9 @@ std::shared_ptr<HwQueue> xsched::cuda::CudaQueueCreate(CUstream stream)
     if (GetCudaLv3Implementation() == kCudaLv3ImplementationTsg) {
         return std::make_shared<CudaQueueLv3Tsg>(stream);
     }
+    if (GetCudaUvmEnabled()) {
+        return std::make_shared<CudaQueueLv1>(stream);
+    }
 
     CUdevice dev;
     CUcontext stream_ctx;
@@ -91,6 +94,9 @@ CUresult xsched::cuda::DirectLaunch(std::shared_ptr<CudaKernelCommand> kernel, C
 
     if (GetCudaLv3Implementation() == kCudaLv3ImplementationTsg) {
         return CudaQueueLv3Tsg::DirectLaunch(kernel, stream);
+    }
+    if (GetCudaUvmEnabled()) {
+        return CudaQueueLv1::DirectLaunch(kernel, stream);
     }
 
     CUdevice dev;

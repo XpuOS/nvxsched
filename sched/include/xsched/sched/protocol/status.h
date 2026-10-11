@@ -24,6 +24,11 @@ struct XQueueStatus
     int64_t       batch_size;
     bool          ready;
     bool          suspended;
+    Timeslice     timeslice; // in microseconds
+    /// @brief The time overhead in micorseconds of scheduling the XQueue,
+    /// including the time of notification, operations execution and memory advises.
+    /// Only valid after the XQueue is resumed.
+    uint64_t      sched_overhead;
     std::chrono::system_clock::time_point ready_time;
 };
 
@@ -44,6 +49,9 @@ struct ProcessStatus
 
 struct Status
 {
+    /// @note The head of the run_queue contains the XQueues that are currently running,
+    /// followed by suspended XQueues that will be run next in order.
+    std::list<XQueueHandle> run_queue;
     std::map<XQueueHandle, std::unique_ptr<XQueueStatus>> xqueue_status;
     std::map<PID, std::unique_ptr<ProcessStatus>> process_status;
 };

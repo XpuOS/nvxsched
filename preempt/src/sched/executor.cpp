@@ -38,6 +38,9 @@ void SchedExecutor::Execute(std::shared_ptr<const sched::Operation> op)
     case kOperationSched:
         ExecuteSchedOperation(std::dynamic_pointer_cast<const sched::SchedOperation>(op));
         break;
+    case kOperationMemory:
+        ExecuteMemoryOperation(std::dynamic_pointer_cast<const sched::MemoryOperation>(op));
+        break;
     case kOperationConfig:
         ExecuteConfigOperation(std::dynamic_pointer_cast<const sched::ConfigOperation>(op));
         break;
@@ -73,6 +76,15 @@ void SchedExecutor::ExecuteSchedOperation(std::shared_ptr<const sched::SchedOper
         std::shared_ptr<XQueue> xq_shptr = XQueueManager::Get(handles[running_cnt + i]);
         if (xq_shptr != nullptr) xq_shptr->Suspend(suspend_flags);
     }
+}
+
+void SchedExecutor::ExecuteMemoryOperation(std::shared_ptr<const sched::MemoryOperation> op)
+{
+    XASSERT(op != nullptr, "memory operation type mismatch");
+    XQueueHandle handle = op->Handle();
+    std::shared_ptr<XQueue> xq_shptr = XQueueManager::Get(handle);
+    if (xq_shptr == nullptr) return;
+    xq_shptr->AdviseMemory(op->AdviseType(), op->PeriodBeginNs(), op->PeriodEndNs());
 }
 
 void SchedExecutor::ExecuteConfigOperation(std::shared_ptr<const sched::ConfigOperation> op)

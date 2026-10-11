@@ -98,8 +98,8 @@ DEFINE_EXPORT_C_REDIRECT_CALL(Driver::KernelSetAttribute, CUresult, cuKernelSetA
 DEFINE_EXPORT_C_REDIRECT_CALL(Driver::KernelSetCacheConfig, CUresult, cuKernelSetCacheConfig, CUkernel, kernel, CUfunc_cache, config, CUdevice, dev);
 DEFINE_EXPORT_C_REDIRECT_CALL(Driver::KernelGetName, CUresult, cuKernelGetName, const char **, name, CUkernel, hfunc);
 DEFINE_EXPORT_C_REDIRECT_CALL(Driver::KernelGetParamInfo, CUresult, cuKernelGetParamInfo, CUkernel, kernel, size_t, paramIndex, size_t *, paramOffset, size_t *, paramSize);
-DEFINE_EXPORT_C_REDIRECT_CALL(Driver::MemGetInfo_v2, CUresult, cuMemGetInfo_v2, size_t *, free, size_t *, total);
-DEFINE_EXPORT_C_REDIRECT_CALL(Driver::MemAlloc_v2, CUresult, cuMemAlloc_v2, CUdeviceptr *, dptr, size_t, bytesize);
+DEFINE_EXPORT_C_REDIRECT_CALL(XMemGetInfo_v2, CUresult, cuMemGetInfo_v2, size_t *, free, size_t *, total);
+DEFINE_EXPORT_C_REDIRECT_CALL(XMemAlloc_v2, CUresult, cuMemAlloc_v2, CUdeviceptr *, dptr, size_t, bytesize);
 DEFINE_EXPORT_C_REDIRECT_CALL(Driver::MemAllocPitch_v2, CUresult, cuMemAllocPitch_v2, CUdeviceptr *, dptr, size_t *, pPitch, size_t, WidthInBytes, size_t, Height, unsigned int, ElementSizeBytes);
 DEFINE_EXPORT_C_REDIRECT_CALL(XMemFree_v2, CUresult, cuMemFree_v2, CUdeviceptr, dptr);
 DEFINE_EXPORT_C_REDIRECT_CALL(Driver::MemGetAddressRange_v2, CUresult, cuMemGetAddressRange_v2, CUdeviceptr *, pbase, size_t *, psize, CUdeviceptr, dptr);
@@ -108,7 +108,7 @@ DEFINE_EXPORT_C_REDIRECT_CALL(Driver::MemFreeHost, CUresult, cuMemFreeHost, void
 DEFINE_EXPORT_C_REDIRECT_CALL(Driver::MemHostAlloc, CUresult, cuMemHostAlloc, void **, pp, size_t, bytesize, unsigned int, Flags);
 DEFINE_EXPORT_C_REDIRECT_CALL(Driver::MemHostGetDevicePointer_v2, CUresult, cuMemHostGetDevicePointer_v2, CUdeviceptr *, pdptr, void *, p, unsigned int, Flags);
 DEFINE_EXPORT_C_REDIRECT_CALL(Driver::MemHostGetFlags, CUresult, cuMemHostGetFlags, unsigned int *, pFlags, void *, p);
-DEFINE_EXPORT_C_REDIRECT_CALL(Driver::MemAllocManaged, CUresult, cuMemAllocManaged, CUdeviceptr *, dptr, size_t, bytesize, unsigned int, flags);
+DEFINE_EXPORT_C_REDIRECT_CALL(XMemAllocManaged, CUresult, cuMemAllocManaged, CUdeviceptr *, dptr, size_t, bytesize, unsigned int, flags);
 DEFINE_EXPORT_C_REDIRECT_CALL(Driver::DeviceRegisterAsyncNotification, CUresult, cuDeviceRegisterAsyncNotification, CUdevice, device, CUasyncCallback, callbackFunc, void *, userData, CUasyncCallbackHandle *, callback);
 DEFINE_EXPORT_C_REDIRECT_CALL(Driver::DeviceUnregisterAsyncNotification, CUresult, cuDeviceUnregisterAsyncNotification, CUdevice, device, CUasyncCallbackHandle, callback);
 DEFINE_EXPORT_C_REDIRECT_CALL(Driver::DeviceGetByPCIBusId, CUresult, cuDeviceGetByPCIBusId, CUdevice *, dev, const char *, pciBusId);
@@ -466,7 +466,7 @@ DEFINE_EXPORT_C_REDIRECT_CALL(Driver::TexRefSetAddress2D_v2, CUresult, cuTexRefS
 DEFINE_EXPORT_C_REDIRECT_CALL(Driver::DeviceTotalMem, CUresult, cuDeviceTotalMem, unsigned int *, bytes, CUdevice, dev);
 DEFINE_EXPORT_C_REDIRECT_CALL(Driver::CtxCreate, CUresult, cuCtxCreate, CUcontext *, pctx, unsigned int, flags, CUdevice, dev);
 DEFINE_EXPORT_C_REDIRECT_CALL(Driver::ModuleGetGlobal, CUresult, cuModuleGetGlobal, CUdeviceptr_v1 *, dptr, unsigned int *, bytes, CUmodule, hmod, const char *, name);
-DEFINE_EXPORT_C_REDIRECT_CALL(Driver::MemGetInfo, CUresult, cuMemGetInfo, unsigned int *, free, unsigned int *, total);
+DEFINE_EXPORT_C_REDIRECT_CALL(XMemGetInfo, CUresult, cuMemGetInfo, unsigned int *, free, unsigned int *, total);
 DEFINE_EXPORT_C_REDIRECT_CALL(Driver::MemAlloc, CUresult, cuMemAlloc, CUdeviceptr_v1 *, dptr, unsigned int, bytesize);
 DEFINE_EXPORT_C_REDIRECT_CALL(Driver::MemAllocPitch, CUresult, cuMemAllocPitch, CUdeviceptr_v1 *, dptr, unsigned int *, pPitch, unsigned int, WidthInBytes, unsigned int, Height, unsigned int, ElementSizeBytes);
 DEFINE_EXPORT_C_REDIRECT_CALL(Driver::MemFree, CUresult, cuMemFree, CUdeviceptr_v1, dptr);

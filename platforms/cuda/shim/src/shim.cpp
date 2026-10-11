@@ -12,6 +12,7 @@
 #include "xsched/cuda/hal/common/cuda.h"
 #include "xsched/cuda/hal/common/levels.h"
 #include "xsched/cuda/hal/common/options.h"
+#include "xsched/cuda/hal/common/cuda_mem.h"
 #include "xsched/cuda/hal/level1/cuda_queue.h"
 #include "xsched/cuda/hal/common/cuda_command.h"
 
@@ -21,24 +22,6 @@ namespace xsched::cuda
 {
 
 static utils::ObjectMap<CUevent, std::shared_ptr<CudaEventRecordCommand>> g_events;
-
-CUstream GetPTDS()
-{
-    /// FIXME: Here we assume that the thread will only use one single CUDA context.
-    /// However, each CUDA context should have its own per-thread default stream.
-    /// TODO: Destory the stream when the thread exits.
-    static thread_local CUstream per_thread_default_stream = 0;
-    if (per_thread_default_stream != 0) return per_thread_default_stream;
-
-    CUstream stream = nullptr;
-    CUDA_ASSERT(Driver::StreamCreate(&stream, CU_STREAM_NON_BLOCKING));
-
-    /// FIXME: If XSCHED_AUTO_XQUEUE is not turned on,
-    /// there is no meaning creating new per-thread default streams.
-    XQueueManager::AutoCreate([&](HwQueueHandle *hwq) {return CudaQueueCreate(hwq, stream);});
-    per_thread_default_stream = stream;
-    return stream;
-}
 
 void WaitBlockingXQueues()
 {
@@ -243,12 +226,46 @@ CUresult XStreamEndCapture_ptsz(CUstream stream, CUgraph *graph)
     return XStreamEndCaptureImpl(stream, graph);
 }
 
+CUresult XMemGetInfo(unsigned int *free, unsigned int *total)
+{
+    CUresult result = Driver::MemGetInfo(free, total);
+    if (result != CUDA_SUCCESS) return result;
+    // Make every process believe it has exclusive access to all GPU memory.
+    *free = *total - CudaMemoryManager::GetCurrentXMemoryManager()->GetTotalAllocatedSize();
+    return CUDA_SUCCESS;
+}
+
+CUresult XMemGetInfo_v2(size_t *free, size_t *total)
+{
+    CUresult result = Driver::MemGetInfo_v2(free, total);
+    if (result != CUDA_SUCCESS) return result;
+    // Make every process believe it has exclusive access to all GPU memory.
+    *free = *total - CudaMemoryManager::GetCurrentXMemoryManager()->GetTotalAllocatedSize();
+    return CUDA_SUCCESS;
+}
+
+CUresult XMemAllocManaged(CUdeviceptr *dptr, size_t bytesize, unsigned int flags)
+{
+    if (dptr == nullptr) return CUDA_ERROR_INVALID_VALUE;
+    auto cuda_req = std::make_shared<CudaMemoryRequest>(bytesize, flags);
+    void *ptr = CudaMemoryManager::GetCurrentXMemoryManager()->Allocate(cuda_req);
+    if (ptr == nullptr) return CUDA_ERROR_OUT_OF_MEMORY;
+    *dptr = (CUdeviceptr)ptr;
+    return CUDA_SUCCESS;
+}
+
+CUresult XMemAlloc_v2(CUdeviceptr *dptr, size_t bytesize)
+{
+    return XMemAllocManaged(dptr, bytesize, CU_MEM_ATTACH_GLOBAL);
+}
+
 CUresult XMemFree_v2(CUdeviceptr dptr)
 {
     /// TODO: Optimize this.
     /// In CUDA semantics, cuMemFree only waits for commands who use this memory.
     XQueueManager::ForEachWaitAll();
-    return Driver::MemFree_v2(dptr);
+    CudaMemoryManager::GetCurrentXMemoryManager()->Free((void *)dptr);
+    return CUDA_SUCCESS;
 }
 
 static CUresult XEventRecordImpl(std::shared_ptr<CudaEventRecordCommand> xevent,
@@ -472,6 +489,43 @@ CUresult XCtxSynchronize()
 static std::mutex g_single_stream_mutex;
 static CUstream g_single_stream = nullptr;
 static int64_t g_single_stream_ref_cnt = 0;
+
+CUstream GetPTDS()
+{
+    /// FIXME: Here we assume that the thread will only use one single CUDA context.
+    /// However, each CUDA context should have its own per-thread default stream.
+    /// TODO: Destory the stream when the thread exits.
+    static thread_local CUstream per_thread_default_stream = 0;
+    if (per_thread_default_stream != 0) return per_thread_default_stream;
+
+    if (!GetCudaSingleStreamPerProcessEnabled() || !GetCudaSinglePtdsPerProcessEnabled()) {
+        // create a new per-thread default stream
+        CUstream stream = nullptr;
+        CUDA_ASSERT(Driver::StreamCreate(&stream, CU_STREAM_NON_BLOCKING));
+        if (GetCudaPtdsAutoXQueueEnabled()) {
+            /// FIXME: If XSCHED_AUTO_XQUEUE is not turned on,
+            /// there is no meaning creating new per-thread default streams.
+            XQueueManager::AutoCreate([&](HwQueueHandle *hwq) {
+                return CudaQueueCreate(hwq, stream);
+            });
+        }
+        per_thread_default_stream = stream;
+        return stream;
+    }
+
+    // use the single stream for this PTDS
+    std::lock_guard<std::mutex> lock(g_single_stream_mutex);
+    if (g_single_stream_ref_cnt == 0) {
+        CUstream stream = nullptr;
+        CUDA_ASSERT(Driver::StreamCreate(&stream, CU_STREAM_NON_BLOCKING));
+        XQueueManager::AutoCreate([&](HwQueueHandle *hwq) {return CudaQueueCreate(hwq, stream);});
+        g_single_stream = stream;
+    }
+
+    g_single_stream_ref_cnt++;
+    per_thread_default_stream = g_single_stream;
+    return per_thread_default_stream;
+}
 
 CUresult XStreamCreate(CUstream *stream, unsigned int flags)
 {

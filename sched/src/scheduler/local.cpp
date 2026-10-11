@@ -16,6 +16,10 @@ LocalScheduler::LocalScheduler(XPolicyType type): Scheduler(kSchedulerLocal), po
     policy_->SetSuspendFunc(std::bind(&LocalScheduler::Suspend, this, std::placeholders::_1));
     policy_->SetResumeFunc(std::bind(&LocalScheduler::Resume, this, std::placeholders::_1));
     policy_->SetAddTimerFunc(std::bind(&LocalScheduler::AddTimer, this, std::placeholders::_1));
+    policy_->SetSetTimesliceFunc(std::bind(
+        &LocalScheduler::SetTimeslice, this, std::placeholders::_1, std::placeholders::_2));
+    policy_->SetUpdateRunQueueFunc(std::bind(
+        &LocalScheduler::UpdateRunQueue, this, std::placeholders::_1));
 }
 
 LocalScheduler::~LocalScheduler()
@@ -103,6 +107,10 @@ void LocalScheduler::SetPolicy(XPolicyType type)
     policy_->SetSuspendFunc(std::bind(&LocalScheduler::Suspend, this, std::placeholders::_1));
     policy_->SetResumeFunc(std::bind(&LocalScheduler::Resume, this, std::placeholders::_1));
     policy_->SetAddTimerFunc(std::bind(&LocalScheduler::AddTimer, this, std::placeholders::_1));
+    policy_->SetSetTimesliceFunc(std::bind(
+        &LocalScheduler::SetTimeslice, this, std::placeholders::_1, std::placeholders::_2));
+    policy_->SetUpdateRunQueueFunc(std::bind(
+        &LocalScheduler::UpdateRunQueue, this, std::placeholders::_1));
     for (auto &status : status_.xqueue_status) Resume(status.first);
     this->Run();
     XINFO("policy changed from %s to %s", old.c_str(), GetPolicyTypeName(policy_type_).c_str());
@@ -193,13 +201,70 @@ void LocalScheduler::Worker()
     }
 }
 
+void LocalScheduler::AdviseMemory()
+{
+    // advise memory only when run queue is updated, to reduce redundant operations
+    if (!run_queue_updated_) return;
+    run_queue_updated_ = false;
+
+    // suspend XQueues that are previously running and now suspended
+    std::list<PID> wait_pids;
+    std::vector<XQueueHandle> suspend_xqs;
+    for (auto &[pid, pstatus] : status_.process_status) {
+        if (pstatus->xqueues_to_suspend.empty()) continue;
+        suspend_xqs.reserve(pstatus->xqueues_to_suspend.size());
+        suspend_xqs.assign(pstatus->xqueues_to_suspend.begin(),
+                           pstatus->xqueues_to_suspend.end());
+        Execute(std::make_shared<SchedOperation>(
+            NextOperationId(pid), pid, SchedOperation::kSchedTypeSuspendAll, suspend_xqs));
+        wait_pids.push_back(pid);
+        suspend_xqs.clear();
+    }
+    for (auto &pid : wait_pids) WaitOperations(pid);
+
+    for (auto it = status_.run_queue.rbegin(); it != status_.run_queue.rend(); ++it) {
+        auto xq_it = status_.xqueue_status.find(*it);
+        if (xq_it == status_.xqueue_status.end()) continue;
+        PID pid = xq_it->second->pid;
+        uint64_t timeslice_ns = (uint64_t)xq_it->second->timeslice * 1000;
+
+        if (xq_it->second->suspended) {
+            Execute(std::make_shared<MemoryOperation>(
+                NextOperationId(pid), pid, *it, kMemoryAdviseWillNeed, 0, timeslice_ns));
+            WaitOperations(pid);
+        } else {
+            Execute(std::make_shared<MemoryOperation>(
+                NextOperationId(pid), pid, *it, kMemoryAdviseLoad, 0, timeslice_ns));
+        }
+    }
+}
+
 void LocalScheduler::ExecuteOperations()
 {
-    for (auto &status : status_.process_status) {
-        if (status.second->running_xqueues.empty() &&
-            status.second->suspended_xqueues.empty()) continue;
-        Execute(std::make_shared<SchedOperation>(
-            NextOperationId(status.second->info.pid), *status.second));
+    auto exec_begin = std::chrono::system_clock::now();
+    // advise memory before scheduling
+    AdviseMemory();
+
+    std::list<PID> wait_pids;
+    std::set<XQueueHandle> xqs_to_resume;
+    for (auto &[pid, pstatus] : status_.process_status) {
+        if (pstatus->running_xqueues.empty() && pstatus->suspended_xqueues.empty()) continue;
+        if (!pstatus->xqueues_to_resume.empty()) wait_pids.push_back(pid);
+        Execute(std::make_shared<SchedOperation>(NextOperationId(pid), *pstatus));
+        xqs_to_resume.insert(pstatus->xqueues_to_resume.begin(), pstatus->xqueues_to_resume.end());
+        pstatus->xqueues_to_resume.clear();
+        pstatus->xqueues_to_suspend.clear();
+    }
+    // wait resume operations to complete
+    for (auto &pid : wait_pids) WaitOperations(pid);
+
+    auto exec_end = std::chrono::system_clock::now();
+    uint64_t exec_us = std::chrono::duration_cast<std::chrono::microseconds>(
+        exec_end - exec_begin).count();
+    for (XQueueHandle xq : xqs_to_resume) {
+        auto xq_it = status_.xqueue_status.find(xq);
+        if (xq_it == status_.xqueue_status.end()) continue;
+        xq_it->second->sched_overhead = exec_us;
     }
 }
 
@@ -441,4 +506,45 @@ void LocalScheduler::Resume(XQueueHandle handle)
 void LocalScheduler::AddTimer(const std::chrono::system_clock::time_point time_point)
 {
     timers_.push_back(time_point);
+}
+
+void LocalScheduler::SetTimeslice(XQueueHandle handle, Timeslice timeslice)
+{
+    auto qit = status_.xqueue_status.find(handle);
+    if (qit == status_.xqueue_status.end()) return;
+    qit->second->timeslice = timeslice;
+}
+
+void LocalScheduler::UpdateRunQueue(const std::list<XQueueHandle> &run_queue)
+{
+    // run_queue_updated_ = true;
+    if (status_.run_queue.size() == run_queue.size()) {
+        auto it_old = status_.run_queue.begin();
+        auto it_new = run_queue.begin();
+        // check if the run queue is changed
+        while (it_old != status_.run_queue.end() && it_new != run_queue.end()) {
+            if (*it_old != *it_new) break;
+            it_old++;
+            it_new++;
+        }
+        if (it_old == status_.run_queue.end() && it_new == run_queue.end()) {
+            // run queue not changed
+            return;
+        }
+    }
+    run_queue_updated_ = true;
+
+    status_.run_queue.clear();
+    std::list<XQueueHandle> suspended_xqueues;
+    // validate and reorder to ensure running XQueues are at the head of the queue
+    for (XQueueHandle xq : run_queue) {
+        auto qit = status_.xqueue_status.find(xq);
+        if (qit == status_.xqueue_status.end()) continue;
+        if (qit->second->suspended) {
+            suspended_xqueues.emplace_back(xq);
+        } else {
+            status_.run_queue.emplace_back(xq);
+        }
+    }
+    status_.run_queue.splice(status_.run_queue.end(), suspended_xqueues);
 }

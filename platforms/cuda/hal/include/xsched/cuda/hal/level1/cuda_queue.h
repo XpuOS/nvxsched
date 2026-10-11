@@ -25,6 +25,8 @@ public:
     virtual HwQueueHandle GetHandle()            override { return GetHwQueueHandle(kStream); }
     virtual bool          SupportDynamicLevel()  override { return false; }
     virtual XPreemptLevel GetMaxSupportedLevel() override { return kPreemptLevelBlock; }
+    virtual std::shared_ptr<preempt::XMemoryManager> GetXMemoryManager() override { return xmm_; }
+    virtual void OnHwCommandSubmit(std::shared_ptr<preempt::HwCommand> hw_cmd) override;
 
 protected:
     const CUstream kStream;
@@ -33,6 +35,10 @@ protected:
     XDevice        xdevice_;
     CUcontext      context_ = nullptr;
     XPreemptLevel  level_ = kPreemptLevelUnknown;
+
+private:
+    std::shared_ptr<preempt::XMemoryManager> xmm_ = nullptr;
+    std::shared_ptr<CudaKernelCommand> last_kernel_ = nullptr;
 };
 
 } // namespace xsched::cuda

@@ -23,4 +23,7 @@ const std::string &GetSchedulerTypeName(XSchedulerType type);
 XPolicyType GetPolicyType(const std::string &name);
 const std::string &GetPolicyTypeName(XPolicyType type);
 
+XMemoryContextType GetMemoryContextType(const std::string &name);
+const std::string &GetMemoryContextTypeName(XMemoryContextType type);
+
 } // namespace xsched::protocol

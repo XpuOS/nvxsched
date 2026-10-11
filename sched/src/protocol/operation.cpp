@@ -14,6 +14,8 @@ std::shared_ptr<const Operation> Operation::CopyConstructor(const void *data)
         return std::make_shared<TerminateOperation>(data);
     case kOperationSched:
         return std::make_shared<SchedOperation>(data);
+    case kOperationMemory:
+        return std::make_shared<MemoryOperation>(data);
     case kOperationConfig:
         return std::make_shared<ConfigOperation>(data);
     default:
@@ -75,6 +77,35 @@ SchedOperation::SchedOperation(OperationId id, PID pid, SchedType type,
 }
 
 SchedOperation::~SchedOperation()
+{
+    if (data_) free((void *)data_);
+}
+
+MemoryOperation::MemoryOperation(const void *data)
+{
+    size_t size = sizeof(OperationData);
+    OperationData *new_data = (OperationData *)malloc(size);
+    memcpy(new_data, data, size);
+    data_ = new_data;
+}
+
+MemoryOperation::MemoryOperation(OperationId id, PID pid, XQueueHandle handle,
+    XMemoryAdviseType advise_type, uint64_t period_begin_ns, uint64_t period_end_ns)
+{
+    OperationData *data = (OperationData *)malloc(MemoryOperation::Size());
+
+    data->meta.id = id;
+    data->meta.type = kOperationMemory;
+    data->meta.pid = pid;
+    data->handle = handle;
+    data->advise_type = advise_type;
+    data->period_begin_ns = period_begin_ns;
+    data->period_end_ns = period_end_ns;
+
+    data_ = data;
+}
+
+MemoryOperation::~MemoryOperation()
 {
     if (data_) free((void *)data_);
 }

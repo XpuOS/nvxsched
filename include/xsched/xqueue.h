@@ -33,6 +33,12 @@ XResult XQueueGet(XQueueHandle *xq, HwQueueHandle hwq);
 /// @return kXSchedSuccess if successful, otherwise an error code.
 XResult XQueueSetPreemptLevel(XQueueHandle xq, XPreemptLevel level);
 
+/// @brief Set the memory context type of an XQueue.
+/// @param xq  [in] Handle to the XQueue.
+/// @param ctx [in] Memory context type, see XMemoryContextType.
+/// @return kXSchedSuccess if successful, otherwise an error code.
+XResult XQueueSetMemoryContextType(XQueueHandle xq, XMemoryContextType ctx);
+
 /// @brief Set the launch threshold and command batch size of an XQueue.
 /// @param xq         [in] Handle to the XQueue.
 /// @param threshold  [in] The number of commands that can be in flight.
@@ -75,6 +81,16 @@ XResult XQueueSuspend(XQueueHandle xq, int64_t flags);
 /// @param flags [in] Resume flags, see XQueueResumeFlag.
 /// @return kXSchedSuccess if successful, otherwise an error code.
 XResult XQueueResume(XQueueHandle xq, int64_t flags);
+
+/// @brief Advise the memory context, i.e., memory regions accessed by the XQueue,
+/// within the given period of time.
+/// @param xq       [in] Handle to the XQueue.
+/// @param advise   [in] Memory advice type, see XMemoryAdviseType.
+/// @param begin_ns [in] The beginning time of the period in nanoseconds.
+/// @param end_ns   [in] The ending time of the period in nanoseconds.
+/// @return kXSchedSuccess if successful, otherwise an error code.
+XResult XQueueAdviseMemory(XQueueHandle xq, XMemoryAdviseType advise,
+                           uint64_t begin_ns, uint64_t end_ns);
 
 /// @brief Get the number of HwCommands that have been submitted to an XQueue.
 /// @param xq    [in]  Handle to the XQueue.

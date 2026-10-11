@@ -15,6 +15,7 @@ class AsyncXQueue : public XQueue
 {
 public:
     AsyncXQueue(std::shared_ptr<HwQueue> hwq, XPreemptLevel level,
+                XMemoryContextType ctx_type = XSCHED_DEFAULT_MEMORY_CONTEXT_TYPE,
                 int64_t threshold  = XSCHED_DEFAULT_COMMAND_THRESHOLD,
                 int64_t batch_size = XSCHED_DEFAULT_COMMAND_BATCH_SIZE);
     virtual ~AsyncXQueue();
@@ -29,13 +30,19 @@ public:
     virtual void Suspend(int64_t flags) override;
     virtual void Resume(int64_t flags) override;
 
+    std::shared_ptr<MemorySet> GetMemoryContext(uint64_t begin_ns, uint64_t end_ns);
+    virtual void AdviseMemory(XMemoryAdviseType adv, uint64_t begin_ns, uint64_t end_ns) override;
+
     virtual void SetPreemptLevel(XPreemptLevel level) override;
+    virtual void SetMemoryContextType(XMemoryContextType ctx_type) override;
     virtual void SetLaunchConfig(int64_t threshold, int64_t batch_size) override;
 
 private:
     XPreemptLevel level_;
+    XMemoryContextType mem_ctx_type_;
     const std::shared_ptr<CommandBuffer> cmd_buf_ = nullptr;
     const std::shared_ptr<LaunchWorker> launch_worker_ = nullptr;
+    const std::shared_ptr<XMemoryManager> xmm_ = nullptr;
 
     std::atomic_bool suspended_ = { false };
     std::atomic_bool terminated_ = { false };

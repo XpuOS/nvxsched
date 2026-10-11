@@ -73,6 +73,18 @@ static const std::map<XPolicyType, std::string> &PolicyNames() {
     return kPolicyNames;
 }
 
+static const std::map<XMemoryContextType, std::string> &MemoryContextNames() {
+    static const std::map<XMemoryContextType, std::string> kMemoryContextNames {
+        { kMemoryContextUnknown            , XSCHED_UNKNOWN_NAME                             },
+        { kMemoryContextNone               , XSCHED_MEMORY_CONTEXT_NAME_NONE                 },
+        { kMemoryContextFull               , XSCHED_MEMORY_CONTEXT_NAME_FULL                 },
+        { kMemoryContextAllocation         , XSCHED_MEMORY_CONTEXT_NAME_ALLOCATION           },
+        { kMemoryContextHeuristic          , XSCHED_MEMORY_CONTEXT_NAME_HEURISTIC            },
+        { kMemoryContextHeuristicAllocation, XSCHED_MEMORY_CONTEXT_NAME_HEURISTIC_ALLOCATION },
+    };
+    return kMemoryContextNames;
+}
+
 #define SEARCH_NAME(map, key) \
     static const std::string unk = XSCHED_UNKNOWN_NAME; \
     auto it = map.find(key); \
@@ -134,6 +146,16 @@ XPolicyType GetPolicyType(const std::string &name)
 const std::string &GetPolicyTypeName(XPolicyType type)
 {
     SEARCH_NAME(PolicyNames(), type);
+}
+
+XMemoryContextType GetMemoryContextType(const std::string &name)
+{
+    SEARCH_KEY(MemoryContextNames(), name, kMemoryContextUnknown);
+}
+
+const std::string &GetMemoryContextTypeName(XMemoryContextType type)
+{
+    SEARCH_NAME(MemoryContextNames(), type);
 }
 
 } // namespace xsched::protocol

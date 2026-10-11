@@ -36,6 +36,7 @@ public:
 
 private:
     void Worker();
+    void AdviseMemory();
     void ExecuteOperations();
     void CreateXQueueStatus(PID pid, const std::string &cmdline, XQueueHandle handle, XDevice dev,
                             XPreemptLevel level, int64_t threshold, int64_t batch_size,
@@ -44,8 +45,11 @@ private:
     void Suspend(XQueueHandle handle);
     void Resume(XQueueHandle handle);
     void AddTimer(const std::chrono::system_clock::time_point time_point);
+    void SetTimeslice(XQueueHandle handle, Timeslice timeslice);
+    void UpdateRunQueue(const std::list<XQueueHandle> &run_queue);
 
     Status status_;
+    bool run_queue_updated_ = false;
     std::deque<std::chrono::system_clock::time_point> timers_;
 
     XPolicyType policy_type_;

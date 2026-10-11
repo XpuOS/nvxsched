@@ -98,6 +98,26 @@ typedef enum {
     kSchedulerMax,
 } XSchedulerType;
 
+typedef enum {
+    kMemoryContextUnknown             = 0,
+    kMemoryContextNone                = 1, // no memory context
+    kMemoryContextFull                = 2, // treat all memory as memory context
+    kMemoryContextAllocation          = 3, // find allocated buffers pointed by command arguments
+    kMemoryContextHeuristic           = 4, // predict memory context based on heuristic rules
+    kMemoryContextHeuristicAllocation = 5, // heuristic rules first, fallback to allocation if failed
+    kMemoryContextMax,
+} XMemoryContextType;
+
+typedef enum
+{
+    kMemoryAdviseUnknown  = 0,
+    kMemoryAdviseNone     = 1,
+    kMemoryAdviseWillNeed = 2,
+    kMemoryAdviseLoad     = 3,
+    kMemoryAdviseUnload   = 4,
+    kMemoryAdviseMax,
+} XMemoryAdviseType;
+
 // NEW_POLICY: A new XPolicyType should be added here when creating a new policy.
 typedef enum {
     kPolicyUnknown                           = 0,

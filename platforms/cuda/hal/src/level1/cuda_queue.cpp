@@ -3,6 +3,7 @@
 #include "xsched/utils/xassert.h"
 #include "xsched/protocol/device.h"
 #include "xsched/cuda/hal/common/levels.h"
+#include "xsched/cuda/hal/common/cuda_mem.h"
 #include "xsched/cuda/hal/common/cuda_assert.h"
 #include "xsched/cuda/hal/common/cuda_command.h"
 #include "xsched/cuda/hal/level1/cuda_queue.h"
@@ -38,6 +39,9 @@ CudaQueueLv1::CudaQueueLv1(CUstream stream): kStream(stream)
 
     // make sure no commands are running on stream_
     CUDA_ASSERT(Driver::StreamSynchronize(kStream));
+
+    // create xmemory manager
+    xmm_ = CudaMemoryManager::GetXMemoryManager(context_);
 }
 
 void CudaQueueLv1::Launch(std::shared_ptr<HwCommand> hw_cmd)
@@ -60,6 +64,14 @@ void CudaQueueLv1::OnXQueueCreate()
 CUresult CudaQueueLv1::DirectLaunch(std::shared_ptr<CudaKernelCommand> kernel, CUstream stream)
 {
     return kernel->LaunchWrapper(stream);
+}
+
+void CudaQueueLv1::OnHwCommandSubmit(std::shared_ptr<preempt::HwCommand> hw_cmd)
+{
+    auto kernel = std::dynamic_pointer_cast<CudaKernelCommand>(hw_cmd);
+    if (kernel == nullptr) return;
+    kernel->SetPreviousKernel(last_kernel_);
+    last_kernel_ = kernel;
 }
 
 EXPORT_C_FUNC XResult CudaQueueGet(HwQueueHandle *hwq, CUstream stream)

@@ -1,5 +1,6 @@
 #include "xsched/hint.h"
 #include "xsched/xqueue.h"
+#include "xsched/protocol/names.h"
 #include "xsched/preempt/hal/hw_command.h"
 #include "xsched/preempt/xqueue/xqueue.h"
 #include "xsched/preempt/xqueue/async_xqueue.h"
@@ -138,6 +139,19 @@ XResult XQueueManager::AutoCreate(std::function<XResult(HwQueueHandle *)> create
         return res;
     }
     XDEBG("auto-created XQueue 0x" FMT_64X " (level-%d) for HwQueue 0x" FMT_64X, xq, level, hwq);
+
+    // set memory context type by env
+    XMemoryContextType ctx_type = kMemoryContextUnknown;
+    std::string env_ctx_type = GetEnv(XSCHED_AUTO_XQUEUE_MEMORY_CONTEXT_ENV_NAME);
+    if (!env_ctx_type.empty()) ctx_type = protocol::GetMemoryContextType(env_ctx_type);
+    if (ctx_type != kMemoryContextUnknown) {
+        res = XQueueSetMemoryContextType(xq, ctx_type);
+        if (res != kXSchedSuccess) {
+            XWARN("fail to auto-set memory context type %d for XQueue 0x" FMT_64X ", err: %d",
+                  ctx_type, xq, res);
+        }
+        XDEBG("auto-set memory context type %d for XQueue 0x" FMT_64X, ctx_type, xq);
+    }
 
     // set launch config by env
     int64_t env_threshold = -1;
@@ -289,6 +303,20 @@ EXPORT_C_FUNC XResult XQueueSetPreemptLevel(XQueueHandle xq, XPreemptLevel level
     return kXSchedSuccess;
 }
 
+EXPORT_C_FUNC XResult XQueueSetMemoryContextType(XQueueHandle xq, XMemoryContextType ctx)
+{
+    if (ctx <= kMemoryContextUnknown || ctx >= kMemoryContextMax) {
+        return kXSchedErrorInvalidValue;
+    }
+    std::shared_ptr<XQueue> xq_shptr = XQueueManager::Get(xq);
+    if (xq_shptr == nullptr) {
+        XWARN("XQueue with handle 0x" FMT_64X " does not exist", xq);
+        return kXSchedErrorNotFound;
+    }
+    xq_shptr->SetMemoryContextType(ctx);
+    return kXSchedSuccess;
+}
+
 EXPORT_C_FUNC XResult XQueueSetLaunchConfig(XQueueHandle xq, int64_t threshold, int64_t batch_size)
 {
     std::shared_ptr<XQueue> xq_shptr = XQueueManager::Get(xq);
@@ -386,6 +414,22 @@ EXPORT_C_FUNC XResult XQueueResume(XQueueHandle xq, int64_t flags)
         return kXSchedErrorNotFound;
     }
     xq_shptr->Resume(flags);
+    return kXSchedSuccess;
+}
+
+EXPORT_C_FUNC XResult XQueueAdviseMemory(XQueueHandle xq, XMemoryAdviseType advise,
+                                         uint64_t begin_ns, uint64_t end_ns)
+{
+    if (advise <= kMemoryAdviseUnknown || advise >= kMemoryAdviseMax) {
+        return kXSchedErrorInvalidValue;
+    }
+    if (begin_ns > end_ns) return kXSchedErrorInvalidValue;
+    std::shared_ptr<XQueue> xq_shptr = XQueueManager::Get(xq);
+    if (xq_shptr == nullptr) {
+        XWARN("XQueue with handle 0x" FMT_64X " does not exist", xq);
+        return kXSchedErrorNotFound;
+    }
+    xq_shptr->AdviseMemory(advise, begin_ns, end_ns);
     return kXSchedSuccess;
 }
 

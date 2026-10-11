@@ -1,19 +1,32 @@
 #pragma once
 
 #define XSCHED_DEFAULT_PREEMPT_LEVEL              kPreemptLevelBlock
+#define XSCHED_DEFAULT_MEMORY_CONTEXT_TYPE        kMemoryContextFull
 #define XSCHED_DEFAULT_COMMAND_THRESHOLD          16
 #define XSCHED_DEFAULT_COMMAND_BATCH_SIZE         8
 
-#define XSCHED_AUTO_XQUEUE_ENV_NAME               "XSCHED_AUTO_XQUEUE"             // = str[ON/OFF]      , default = OFF
-#define XSCHED_AUTO_XQUEUE_LEVEL_ENV_NAME         "XSCHED_AUTO_XQUEUE_LEVEL"       // = int[1, 3]        , default = 1
-#define XSCHED_AUTO_XQUEUE_THRESHOLD_ENV_NAME     "XSCHED_AUTO_XQUEUE_THRESHOLD"   // = int[1, max_int64], default = 16
-#define XSCHED_AUTO_XQUEUE_BATCH_SIZE_ENV_NAME    "XSCHED_AUTO_XQUEUE_BATCH_SIZE"  // = int[1, threshold], default = 8
-#define XSCHED_AUTO_XQUEUE_PRIORITY_ENV_NAME      "XSCHED_AUTO_XQUEUE_PRIORITY"    // = int[-256, 255]   , default = 0
-#define XSCHED_AUTO_XQUEUE_UTILIZATION_ENV_NAME   "XSCHED_AUTO_XQUEUE_UTILIZATION" // = int[0, 100]
-#define XSCHED_AUTO_XQUEUE_TIMESLICE_ENV_NAME     "XSCHED_AUTO_XQUEUE_TIMESLICE"   // = int[100, 100000]
-#define XSCHED_AUTO_XQUEUE_DEADLINE_ENV_NAME      "XSCHED_AUTO_XQUEUE_DEADLINE"    // = int[1, max_int64]
-#define XSCHED_AUTO_XQUEUE_KDEADLINE_ENV_NAME     "XSCHED_AUTO_XQUEUE_KDEADLINE"   // = int[1, max_int64]
-#define XSCHED_AUTO_XQUEUE_LAXITY_ENV_NAME        "XSCHED_AUTO_XQUEUE_LAXITY"      // = int[1, max_int64]
+#define XSCHED_AUTO_XQUEUE_ENV_NAME                "XSCHED_AUTO_XQUEUE"                // = str[ON/OFF]      , default = OFF
+#define XSCHED_AUTO_XQUEUE_LEVEL_ENV_NAME          "XSCHED_AUTO_XQUEUE_LEVEL"          // = int[1, 3]        , default = 1
+#define XSCHED_AUTO_XQUEUE_MEMORY_CONTEXT_ENV_NAME "XSCHED_AUTO_XQUEUE_MEMORY_CONTEXT" // = str[NONE/FULL/ALOC/HEUR/HEUR_ALOC], default = FULL
+#define XSCHED_AUTO_XQUEUE_THRESHOLD_ENV_NAME      "XSCHED_AUTO_XQUEUE_THRESHOLD"      // = int[1, max_int64], default = 16
+#define XSCHED_AUTO_XQUEUE_BATCH_SIZE_ENV_NAME     "XSCHED_AUTO_XQUEUE_BATCH_SIZE"     // = int[1, threshold], default = 8
+#define XSCHED_AUTO_XQUEUE_PRIORITY_ENV_NAME       "XSCHED_AUTO_XQUEUE_PRIORITY"       // = int[-256, 255]   , default = 0
+#define XSCHED_AUTO_XQUEUE_UTILIZATION_ENV_NAME    "XSCHED_AUTO_XQUEUE_UTILIZATION"    // = int[0, 100]
+#define XSCHED_AUTO_XQUEUE_TIMESLICE_ENV_NAME      "XSCHED_AUTO_XQUEUE_TIMESLICE"      // = int[100, 100000]
+#define XSCHED_AUTO_XQUEUE_DEADLINE_ENV_NAME       "XSCHED_AUTO_XQUEUE_DEADLINE"       // = int[1, max_int64]
+#define XSCHED_AUTO_XQUEUE_KDEADLINE_ENV_NAME      "XSCHED_AUTO_XQUEUE_KDEADLINE"      // = int[1, max_int64]
+#define XSCHED_AUTO_XQUEUE_LAXITY_ENV_NAME         "XSCHED_AUTO_XQUEUE_LAXITY"         // = int[1, max_int64]
+
+#define XSCHED_MEMORY_CONTEXT_NAME_NONE                 "NONE" // no memory context
+#define XSCHED_MEMORY_CONTEXT_NAME_FULL                 "FULL" // treat all memory as memory context
+#define XSCHED_MEMORY_CONTEXT_NAME_ALLOCATION           "ALOC" // find allocated buffers pointed by command arguments
+#define XSCHED_MEMORY_CONTEXT_NAME_HEURISTIC            "HEUR" // predict memory context based on heuristic rules
+#define XSCHED_MEMORY_CONTEXT_NAME_HEURISTIC_ALLOCATION "HEUR_ALOC" // heuristic rules first, fallback to allocation if failed
+#define XSCHED_MEMORY_CONTEXT_HEURISTIC_FILE_ENV_NAME   "XSCHED_MEMORY_CONTEXT_HEURISTIC_FILE" // = str, default = memory_context.json
+
+#define XSCHED_EXECUTION_TIME_FILE_ENV_NAME          "XSCHED_EXECUTION_TIME_FILE" // = str, default = execution_time.json
+#define XSCHED_EXECUTION_TIME_WARMUP_COUNT_ENV_NAME  "XSCHED_EXECUTION_TIME_WARMUP_COUNT"  // = int[0, max_int64], default = 1000, warmup count
+#define XSCHED_EXECUTION_TIME_PROFILE_COUNT_ENV_NAME "XSCHED_EXECUTION_TIME_PROFILE_COUNT" // = int[1, max_int64], default = 5000, profile count (include warmup)
 
 #define XSCHED_ASCEND_LIB_ENV_NAME     "XSCHED_ASCEND_LIB"
 #define XSCHED_COREX_LIB_ENV_NAME      "XSCHED_COREX_LIB"
@@ -28,7 +41,10 @@
 #define XSCHED_VPI_LIB_ENV_NAME        "XSCHED_VPI_LIB"
 // NEW_PLATFORM: New platform lib env names go here.
 
-#define XSCHED_CUDA_SINGLE_STREAM_PER_PROCESS_ENV_NAME "XSCHED_CUDA_SINGLE_STREAM_PER_PROCESS" // = str[ON/OFF], default = OFF, if set to ON, each stream will use one single cuda stream
+#define XSCHED_CUDA_UVM_ENV_NAME                       "XSCHED_CUDA_UVM"                       // = str[ON/OFF], default = OFF, if set to ON, preempt level should be set to Level-1
+#define XSCHED_CUDA_PTDS_AUTO_XQUEUE_ENV_NAME          "XSCHED_CUDA_PTDS_AUTO_XQUEUE"          // = str[ON/OFF], default = ON, enable auto XQueue create for PTDS, effective when XSCHED_AUTO_XQUEUE is ON, not effective for single stream
+#define XSCHED_CUDA_SINGLE_STREAM_PER_PROCESS_ENV_NAME "XSCHED_CUDA_SINGLE_STREAM_PER_PROCESS" // = str[ON/OFF], default = OFF, force the process to use one single cuda stream
+#define XSCHED_CUDA_SINGLE_PTDS_PER_PROCESS_ENV_NAME   "XSCHED_CUDA_SINGLE_PTDS_PER_PROCESS"   // = str[ON/OFF], default = OFF, use single stream per process for PTDS, effective when XSCHED_CUDA_SINGLE_STREAM_PER_PROCESS is ON
 #define XSCHED_CUDA_LV3_IMPL_ENV_NAME                  "XSCHED_CUDA_LV3_IMPL"                  // = str[TSG/TRAP], default = TRAP
 #define XSCHED_LEVELZERO_SLICE_CNT_ENV_NAME            "XSCHED_LEVELZERO_SLICE_CNT"
 

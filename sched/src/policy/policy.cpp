@@ -9,6 +9,7 @@
 #include "xsched/sched/policy/chpf.h"
 #include "xsched/sched/policy/up.h"
 #include "xsched/sched/policy/pup.h"
+#include "xsched/sched/policy/spup.h"
 #include "xsched/sched/policy/kedf.h"
 #include "xsched/sched/policy/lax.h"
 #include "xsched/sched/policy/awf.h"
@@ -36,6 +37,18 @@ void Policy::AddTimer(const TimePoint time_point)
     XDEBG("add timer function not set");
 }
 
+void Policy::SetTimeslice(XQueueHandle handle, Timeslice timeslice)
+{
+    if (set_timeslice_func_) return set_timeslice_func_(handle, timeslice);
+    XDEBG("set timeslice function not set");
+}
+
+void Policy::UpdateRunQueue(const std::list<XQueueHandle> &run_queue)
+{
+    if (update_run_queue_func_) return update_run_queue_func_(run_queue);
+    XDEBG("update run queue function not set");
+}
+
 std::unique_ptr<Policy> xsched::sched::CreatePolicy(XPolicyType type)
 {
     // NEW_POLICY: A new case handling new PolicyType should be added here
@@ -51,6 +64,8 @@ std::unique_ptr<Policy> xsched::sched::CreatePolicy(XPolicyType type)
             return std::make_unique<UtilizationPartitionPolicy>();
         case kPolicyProcessUtilizationPartition:
             return std::make_unique<ProcessUtilizationPartitionPolicy>();
+        case kPolicyStrictProcessUtilizationPartition:
+            return std::make_unique<StrictProcessUtilizationPartitionPolicy>();
         case kPolicyKEarliestDeadlineFirst:
             return std::make_unique<KEarliestDeadlineFirstPolicy>();
         case kPolicyLaxity:

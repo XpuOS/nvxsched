@@ -3,22 +3,30 @@
 #include <cstring>
 
 #include "xsched/preempt/hal/hw_command.h"
+#include "xsched/cuda/hal/common/dims.h"
 #include "xsched/cuda/hal/common/cuda.h"
 #include "xsched/cuda/hal/common/driver.h"
 #include "xsched/cuda/hal/common/cuda_assert.h"
+#include "xsched/cuda/hal/profile/profile.h"
 
 namespace xsched::cuda
 {
 
-#define CUDA_COMMAND(name, base, func, ...) \
+#define CUDA_COMMAND(name, base, func, get_exec_time_ns, get_mem_ctx, ...) \
     class name : public base \
     { \
     public: \
         name(FOR_EACH_PAIR_COMMA(DECLARE_PARAM, __VA_ARGS__)) \
-            : base(), FOR_EACH_PAIR_COMMA(DECLARE_COPY_PRIVATE_ARG, __VA_ARGS__) {} \
+            : base(), FOR_EACH_PAIR_COMMA(DECLARE_COPY_PRIVATE_ARG, __VA_ARGS__) \
+            , mem_ctx_(std::make_shared<preempt::MemorySet>()) \
+        { get_mem_ctx; exec_time_ns_ = get_exec_time_ns; } \
         virtual ~name() = default; \
+        virtual int64_t GetExecutionTimeNs() override { return exec_time_ns_; } \
+        virtual std::shared_ptr<preempt::MemorySet> GetMemoryContext() override { return mem_ctx_; } \
     private: \
         FOR_EACH_PAIR_SEMICOLON(DECLARE_PRIVATE_PARAM, __VA_ARGS__) \
+        int64_t exec_time_ns_ = -1; \
+        std::shared_ptr<preempt::MemorySet> mem_ctx_ = nullptr; \
         virtual CUresult Launch(CUstream stream) override \
         { return func(FOR_EACH_PAIR_COMMA(DECLARE_PRIVATE_ARG, __VA_ARGS__), stream); } \
     };
@@ -37,6 +45,8 @@ public:
 private:
     CUcontext ctx_ = nullptr;
     CUevent following_event_ = nullptr;
+    CUevent profile_begin_event_ = nullptr;
+    CUevent profile_end_event_ = nullptr;
     virtual CUresult Launch(CUstream stream) = 0;
 };
 
@@ -46,7 +56,30 @@ class CudaKernelCommand : public CudaCommand
 public:
     CudaKernelCommand(CUfunction func, void **params, void **extra, bool deep_copy);
     virtual ~CudaKernelCommand();
-    virtual unsigned int BlockCnt() const = 0;
+    virtual uint64_t GetPackedGridDim() const = 0;
+    virtual uint32_t GetPackedBlockDim() const = 0;
+
+    size_t BlockCnt() const
+    {
+        int32_t gdx, gdy, gdz;
+        UnpackGridDim(GetPackedGridDim(), gdx, gdy, gdz);
+        return (size_t)gdx * (size_t)gdy * (size_t)gdz;
+    }
+
+    std::string GetKernelName() const;
+    void SetPreviousKernel(std::shared_ptr<CudaKernelCommand> prev) { prev_kern_ = prev; }
+    virtual int64_t GetExecutionTimeNs() override { return exec_time_ns_; }
+    virtual std::shared_ptr<preempt::MemorySet> GetMemoryContext() override { return mem_ctx_; }
+    virtual void Predict(XMemoryContextType ctx, std::shared_ptr<preempt::XMemoryManager> xmm) override;
+
+    void PredictExecutionTime();
+    static void PredictMemoryContextAllocation(CUfunction func, void **params, size_t param_cnt,
+                                               std::shared_ptr<preempt::XMemoryManager> xmm,
+                                               std::shared_ptr<preempt::MemorySet> mem_ctx);
+    static bool PredictMemoryContextHeuristic(
+        CUcontext ctx, CUfunction func, uint64_t pgdim, uint32_t pbdim, void **params,
+        CUfunction func_prev, uint64_t pgdim_prev, uint32_t pbdim_prev, void **params_prev,
+        std::shared_ptr<preempt::MemorySet> mem_ctx);
 
     // After CUDA 12, kFunc could be a CUkernel. We convert CUkernel to CUfunction
     // by calling cuKernelGetFunction, the actual CUfunction is stored in kFuncHandle.
@@ -70,6 +103,11 @@ private:
     char *param_data_ = nullptr;
     char *extra_data_ = nullptr;
     size_t extra_buffer_size_ = 0;
+
+    int64_t exec_time_ns_ = -1;
+    // For memory context prediction.
+    std::shared_ptr<preempt::MemorySet> mem_ctx_ = nullptr;
+    std::shared_ptr<CudaKernelCommand> prev_kern_ = nullptr;
 };
 
 class CudaKernelLaunchCommand : public CudaKernelCommand
@@ -82,7 +120,8 @@ public:
         : CudaKernelCommand(func, params, extra, deep_copy)
         , gdx_(gdx), gdy_(gdy), gdz_(gdz), bdx_(bdx), bdy_(bdy), bdz_(bdz), shm_(shm) {}
     virtual ~CudaKernelLaunchCommand() = default;
-    virtual unsigned int BlockCnt() const override { return gdx_ * gdy_ * gdz_; }
+    virtual uint64_t GetPackedGridDim() const override { return PackGridDim(gdx_, gdy_, gdz_); }
+    virtual uint32_t GetPackedBlockDim() const override { return PackBlockDim(bdx_, bdy_, bdz_); }
 
 private:
     const unsigned int gdx_, gdy_, gdz_; // grid dimension
@@ -103,8 +142,10 @@ public:
     CudaKernelLaunchExCommand(const CUlaunchConfig *cfg, CUfunction func,
                               void **params, void **extra, bool deep_copy);
     virtual ~CudaKernelLaunchExCommand();
-    virtual unsigned int BlockCnt() const override
-    { return cfg_.gridDimX * cfg_.gridDimY * cfg_.gridDimZ; }
+    virtual uint64_t GetPackedGridDim() const override
+    { return PackGridDim(cfg_.gridDimX, cfg_.gridDimY, cfg_.gridDimZ); }
+    virtual uint32_t GetPackedBlockDim() const override
+    { return PackBlockDim(cfg_.blockDimX, cfg_.blockDimY, cfg_.blockDimZ); }
 
 private:
     CUlaunchConfig cfg_;
@@ -159,9 +200,16 @@ public:
     CudaGraphLaunchCommand(CUgraphExec graph_exec): CudaGraphCommand(graph_exec) {}
     virtual ~CudaGraphLaunchCommand() = default;
 
+    virtual int64_t GetExecutionTimeNs() override { return exec_time_ns_; }
+    virtual std::shared_ptr<preempt::MemorySet> GetMemoryContext() override { return mem_ctx_; }
+    virtual void Predict(XMemoryContextType ctx, std::shared_ptr<preempt::XMemoryManager> xmm) override;
+
 private:
     virtual CUresult Launch(CUstream stream) override
     { return Driver::GraphLaunch(graph_exec_, stream); }
+
+    int64_t exec_time_ns_ = -1;
+    std::shared_ptr<preempt::MemorySet> mem_ctx_ = nullptr;
 };
 
 // memory commands
@@ -177,7 +225,13 @@ class CudaMemcpyHtoDV2Command : public CudaMemoryCommand
 public:
     CudaMemcpyHtoDV2Command(CUdeviceptr dstDevice, const void *srcHost, size_t ByteCount)
         : CudaMemoryCommand(), dstDevice_(dstDevice), srcHost_(srcHost), ByteCount_(ByteCount)
+        , mem_ctx_(std::make_shared<preempt::MemorySet>())
     {
+        mem_ctx_->writes.Merge(dstDevice, dstDevice + ByteCount);
+        exec_time_ns_ = Profiler::GetMemcpyExecutionTimeNs(
+            CUPTI_ACTIVITY_MEMCPY_KIND_HTOD, ByteCount
+        );
+
         if (srcHost == nullptr || ByteCount == 0) return;
         // check if srcHost is pinned
         uint32_t type = 0;
@@ -197,11 +251,15 @@ public:
         if (!src_host_allocated_) return;
         CUDA_ASSERT(Driver::MemFreeHost((void *)srcHost_));
     };
+    virtual int64_t GetExecutionTimeNs() override { return exec_time_ns_; }
+    virtual std::shared_ptr<preempt::MemorySet> GetMemoryContext() override { return mem_ctx_; }
 
 private:
     CUdeviceptr dstDevice_;
     const void *srcHost_;
     size_t ByteCount_;
+    int64_t exec_time_ns_ = -1;
+    std::shared_ptr<preempt::MemorySet> mem_ctx_ = nullptr;
     bool src_host_allocated_ = false;
 
     virtual CUresult Launch(CUstream stream) override
@@ -209,17 +267,18 @@ private:
         return Driver::MemcpyHtoDAsync_v2(dstDevice_, srcHost_, ByteCount_, stream);
     }
 };
-// CUDA_COMMAND(CudaMemcpyHtoDV2Command, CudaMemoryCommand, Driver::MemcpyHtoDAsync_v2, CUdeviceptr, dstDevice, const void *, srcHost, size_t, ByteCount);
-CUDA_COMMAND(CudaMemcpyDtoHV2Command, CudaMemoryCommand, Driver::MemcpyDtoHAsync_v2, void *, dstHost, CUdeviceptr, srcDevice, size_t, ByteCount);
-CUDA_COMMAND(CudaMemcpyDtoDV2Command, CudaMemoryCommand, Driver::MemcpyDtoDAsync_v2, CUdeviceptr, dstDevice, CUdeviceptr, srcDevice, size_t, ByteCount);
-CUDA_COMMAND(CudaMemsetD8Command, CudaMemoryCommand, Driver::MemsetD8Async, CUdeviceptr, dstDevice, unsigned char, uc, size_t, N);
-CUDA_COMMAND(CudaMemsetD16Command, CudaMemoryCommand, Driver::MemsetD16Async, CUdeviceptr, dstDevice, unsigned short, us, size_t, N);
-CUDA_COMMAND(CudaMemsetD32Command, CudaMemoryCommand, Driver::MemsetD32Async, CUdeviceptr, dstDevice, unsigned int, ui, size_t, N);
-CUDA_COMMAND(CudaMemsetD2D8Command, CudaMemoryCommand, Driver::MemsetD2D8Async, CUdeviceptr, dstDevice, size_t, dstPitch, unsigned char, uc, size_t, Width, size_t, Height);
-CUDA_COMMAND(CudaMemsetD2D16Command, CudaMemoryCommand, Driver::MemsetD2D16Async, CUdeviceptr, dstDevice, size_t, dstPitch, unsigned short, us, size_t, Width, size_t, Height);
-CUDA_COMMAND(CudaMemsetD2D32Command, CudaMemoryCommand, Driver::MemsetD2D32Async, CUdeviceptr, dstDevice, size_t, dstPitch, unsigned int, ui, size_t, Width, size_t, Height);
-CUDA_COMMAND(CudaMemoryAllocCommand, CudaMemoryCommand, Driver::MemAllocAsync, CUdeviceptr *, dptr, size_t, bytesize);
-CUDA_COMMAND(CudaMemoryFreeCommand, CudaMemoryCommand, Driver::MemFreeAsync, CUdeviceptr, dptr);
+
+// CUDA_COMMAND(CudaMemcpyHtoDV2Command, CudaMemoryCommand, Driver::MemcpyHtoDAsync_v2, Profiler::GetMemcpyExecutionTimeNs(CUPTI_ACTIVITY_MEMCPY_KIND_HTOD, ByteCount)                   , {mem_ctx_->writes.Merge(dstDevice, dstDevice + ByteCount);                 }, CUdeviceptr, dstDevice, const void *, srcHost, size_t, ByteCount);
+CUDA_COMMAND(CudaMemcpyDtoHV2Command, CudaMemoryCommand, Driver::MemcpyDtoHAsync_v2, Profiler::GetMemcpyExecutionTimeNs(CUPTI_ACTIVITY_MEMCPY_KIND_DTOH, ByteCount)                   , {mem_ctx_->reads.Merge(srcDevice, srcDevice + ByteCount);                  }, void *, dstHost, CUdeviceptr, srcDevice, size_t, ByteCount);
+CUDA_COMMAND(CudaMemcpyDtoDV2Command, CudaMemoryCommand, Driver::MemcpyDtoDAsync_v2, Profiler::GetMemcpyExecutionTimeNs(CUPTI_ACTIVITY_MEMCPY_KIND_DTOD, ByteCount)                   , {mem_ctx_->reads.Merge(srcDevice, srcDevice + ByteCount); mem_ctx_->writes.Merge(dstDevice, dstDevice + ByteCount);}, CUdeviceptr, dstDevice, CUdeviceptr, srcDevice, size_t, ByteCount);
+CUDA_COMMAND(CudaMemsetD8Command    , CudaMemoryCommand, Driver::MemsetD8Async     , Profiler::GetMemsetExecutionTimeNs(CUPTI_ACTIVITY_MEMORY_KIND_DEVICE, sizeof(unsigned char) * N) , {mem_ctx_->writes.Merge(dstDevice, dstDevice + N * sizeof(unsigned char)); }, CUdeviceptr, dstDevice, unsigned char, uc, size_t, N);
+CUDA_COMMAND(CudaMemsetD16Command   , CudaMemoryCommand, Driver::MemsetD16Async    , Profiler::GetMemsetExecutionTimeNs(CUPTI_ACTIVITY_MEMORY_KIND_DEVICE, sizeof(unsigned short) * N), {mem_ctx_->writes.Merge(dstDevice, dstDevice + N * sizeof(unsigned short));}, CUdeviceptr, dstDevice, unsigned short, us, size_t, N);
+CUDA_COMMAND(CudaMemsetD32Command   , CudaMemoryCommand, Driver::MemsetD32Async    , Profiler::GetMemsetExecutionTimeNs(CUPTI_ACTIVITY_MEMORY_KIND_DEVICE, sizeof(unsigned int) * N)  , {mem_ctx_->writes.Merge(dstDevice, dstDevice + N * sizeof(unsigned int));  }, CUdeviceptr, dstDevice, unsigned int, ui, size_t, N);
+CUDA_COMMAND(CudaMemsetD2D8Command  , CudaMemoryCommand, Driver::MemsetD2D8Async   , -1, {}, CUdeviceptr, dstDevice, size_t, dstPitch, unsigned char, uc, size_t, Width, size_t, Height);
+CUDA_COMMAND(CudaMemsetD2D16Command , CudaMemoryCommand, Driver::MemsetD2D16Async  , -1, {}, CUdeviceptr, dstDevice, size_t, dstPitch, unsigned short, us, size_t, Width, size_t, Height);
+CUDA_COMMAND(CudaMemsetD2D32Command , CudaMemoryCommand, Driver::MemsetD2D32Async  , -1, {}, CUdeviceptr, dstDevice, size_t, dstPitch, unsigned int, ui, size_t, Width, size_t, Height);
+CUDA_COMMAND(CudaMemoryAllocCommand , CudaMemoryCommand, Driver::MemAllocAsync     , -1, {}, CUdeviceptr *, dptr, size_t, bytesize);
+CUDA_COMMAND(CudaMemoryFreeCommand  , CudaMemoryCommand, Driver::MemFreeAsync      , -1, {}, CUdeviceptr, dptr);
 
 class CudaMemcpy2DV2Command : public CudaMemoryCommand
 {

@@ -3,6 +3,7 @@
 #include <functional>
 
 #include "xsched/types.h"
+#include "xsched/preempt/hal/hw_mem.h"
 #include "xsched/preempt/hal/hw_queue.h"
 #include "xsched/preempt/hal/hw_command.h"
 
@@ -35,10 +36,22 @@ public:
     virtual void Suspend(int64_t flags) = 0;
     virtual void Resume(int64_t flags) = 0;
 
+    /// @brief Advise the memory context, i.e., memory regions accessed by the XQueue,
+    /// within the given period of time.
+    /// @param begin_ns The beginning time of the period in nanoseconds.
+    /// Use 0 to indicate the current time.
+    /// @param end_ns The ending time of the period in nanoseconds,
+    /// Use UINT64_MAX to indicate the maximum known access time.
+    virtual void AdviseMemory(XMemoryAdviseType advise, uint64_t begin_ns, uint64_t end_ns) = 0;
+
     /// @brief Set the preempt level of the XQueue. NOT thread-safe, make sure there is
     /// NO other operations on the XQueue when calling this function.
     /// @param level The new preempt level.
     virtual void SetPreemptLevel(XPreemptLevel level) = 0;
+
+    /// @brief Set the memory context type of the XQueue.
+    /// @param ctx The new memory context type.
+    virtual void SetMemoryContextType(XMemoryContextType ctx) = 0;
 
     /// @brief Set the launching configuration of the XQueue.
     /// @param threshold The new in-flight command threshold, <= 0 means no change.

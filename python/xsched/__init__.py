@@ -96,6 +96,25 @@ class XSchedulerType(IntEnum):
     kSchedulerMax        = 4
 
 
+class XMemoryContextType(IntEnum):
+    kMemoryContextUnknown             = 0
+    kMemoryContextNone                = 1
+    kMemoryContextFull                = 2
+    kMemoryContextAllocation          = 3
+    kMemoryContextHeuristic           = 4
+    kMemoryContextHeuristicAllocation = 5
+    kMemoryContextMax                 = 6
+
+
+class XMemoryAdviseType(IntEnum):
+    kMemoryAdviseUnknown  = 0
+    kMemoryAdviseNone     = 1
+    kMemoryAdviseWillNeed = 2
+    kMemoryAdviseLoad     = 3
+    kMemoryAdviseUnload   = 4
+    kMemoryAdviseMax      = 5
+
+
 class XPolicyType(IntEnum):
     kPolicyUnknown                           = 0
     kPolicyHighestPriorityFirst              = 1
@@ -144,6 +163,8 @@ class XSched:
     __hwqh_ctype   = ctypes.c_uint64
     __hwcmdh_ctype = ctypes.c_uint64
     __preempt_ctype = ctypes.c_int32
+    __memctx_ctype = ctypes.c_int32
+    __memadv_ctype = ctypes.c_int32
     __prio_ctype   = ctypes.c_int32
     __util_ctype   = ctypes.c_int32
     __ts_ctype     = ctypes.c_int64
@@ -166,6 +187,9 @@ class XSched:
         __dll.XQueueSetPreemptLevel.argtypes = [__xqh_ctype, __preempt_ctype]
         __dll.XQueueSetPreemptLevel.restype = __xres_ctype
 
+        __dll.XQueueSetMemoryContextType.argtypes = [__xqh_ctype, __memctx_ctype]
+        __dll.XQueueSetMemoryContextType.restype = __xres_ctype
+
         __dll.XQueueSetLaunchConfig.argtypes = [__xqh_ctype, ctypes.c_int64, ctypes.c_int64]
         __dll.XQueueSetLaunchConfig.restype = __xres_ctype
 
@@ -186,6 +210,9 @@ class XSched:
 
         __dll.XQueueResume.argtypes = [__xqh_ctype, ctypes.c_int64]
         __dll.XQueueResume.restype = __xres_ctype
+
+        __dll.XQueueAdviseMemory.argtypes = [__xqh_ctype, __memadv_ctype, ctypes.c_uint64, ctypes.c_uint64]
+        __dll.XQueueAdviseMemory.restype = __xres_ctype
 
         __dll.XQueueProfileHwCommandCount.argtypes = [__xqh_ctype, ctypes.POINTER(ctypes.c_int64)]
         __dll.XQueueProfileHwCommandCount.restype = __xres_ctype
@@ -251,6 +278,11 @@ class XSched:
         return XResult(res)
 
     @staticmethod
+    def XQueueSetMemoryContextType(xq: XQueueHandle, ctx: XMemoryContextType) -> XResult:
+        res = XSched.__dll.XQueueSetMemoryContextType(xq, ctx)
+        return XResult(res)
+
+    @staticmethod
     def XQueueSetLaunchConfig(xq: XQueueHandle, threshold: int, batch_size: int) -> XResult:
         res = XSched.__dll.XQueueSetLaunchConfig(xq, threshold, batch_size)
         return XResult(res)
@@ -284,6 +316,12 @@ class XSched:
     @staticmethod
     def XQueueResume(xq: XQueueHandle, flags: int) -> XResult:
         res = XSched.__dll.XQueueResume(xq, flags)
+        return XResult(res)
+
+    @staticmethod
+    def XQueueAdviseMemory(xq: XQueueHandle, advise: XMemoryAdviseType,
+                           begin_ns: int, end_ns: int) -> XResult:
+        res = XSched.__dll.XQueueAdviseMemory(xq, advise, begin_ns, end_ns)
         return XResult(res)
 
     @staticmethod
