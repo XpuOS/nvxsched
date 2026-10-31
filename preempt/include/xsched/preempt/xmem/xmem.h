@@ -22,10 +22,10 @@ inline std::string GetExecutionTimeFileName()
     return file;
 }
 
-inline std::string GetMemoryContextHeuristicFileName()
+inline std::string GetMemoryContextTemplateFileName()
 {
     static const std::string file = []{
-        std::string str = GetEnv(XSCHED_MEMORY_CONTEXT_HEURISTIC_FILE_ENV_NAME);
+        std::string str = GetEnv(XSCHED_MEMORY_CONTEXT_TEMPLATE_FILE_ENV_NAME);
         return str.empty() ? std::string("memory_context.json") : str;
     }();
     return file;
@@ -41,6 +41,8 @@ public:
     void *Allocate(std::shared_ptr<HwMemoryRequest> req);
     void Free(void *ptr);
     void Advise(std::shared_ptr<utils::Region> mem, XMemoryAdviseType advise);
+    void UpdateMemoryInfo(uint64_t operation_id);
+    void OnContextTypeChange(XMemoryContextType type);
 
     size_t GetTotalAllocatedSize();
     size_t GetAllocatedSize(void *ptr);
@@ -50,6 +52,8 @@ private:
     std::mutex mtx_;
     std::map<void *, size_t> allocated_;
     std::shared_ptr<HwMemoryManager> hw_mm_ = nullptr;
+    std::mutex update_mtx_;
+    uint64_t last_update_operation_id_ = 0;
 };
 
 } // namespace xsched::preempt

@@ -153,6 +153,41 @@ public:
         regions_ = std::move(result);
     }
 
+    void difference(const Region &other)
+    {
+        if (other.regions_.empty()) return;
+        if (regions_.empty()) return;
+
+        std::map<uint64_t, uint64_t> result;
+        for (const auto [end, begin] : regions_) {
+            uint64_t cur_begin = begin;
+            uint64_t cur_end = end;
+
+            // find the first region in the other regions whose end > begin
+            auto it = other.regions_.upper_bound(begin);
+
+            for (; it != other.regions_.end(); ++it) {
+                uint64_t other_begin = it->second;
+                uint64_t other_end = it->first;
+
+                // there is no intersection
+                if (other_begin >= cur_end) break;
+
+                // upper_bound ensures other_end > begin, and other_begin < cur_end here,
+                // so [cur_begin, cur_end) and [other_begin, other_end) must have intersection
+                if (other_begin > cur_begin) {
+                    result[other_begin] = cur_begin;
+                }
+                cur_begin = std::max(cur_begin, other_end);
+                if (cur_begin >= cur_end) break;
+            }
+            if (cur_begin < cur_end) {
+                result[cur_end] = cur_begin;
+            }
+        }
+        regions_ = std::move(result);
+    }
+
     void ForEach(std::function<void (uint64_t begin, uint64_t end)> func) const
     {
         for (const auto [end, begin] : regions_) {

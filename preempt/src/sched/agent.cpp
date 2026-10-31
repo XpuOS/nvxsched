@@ -135,6 +135,9 @@ XResult SchedAgent::ReplaceScheduler(XSchedulerType scheduler_type, XPolicyType 
 
     // should replace the scheduler
     FiniScheduler();
+    /// FIXME: Bugs here, LocalScheduler maintains operation IDs,
+    /// replace a scheduler will clear the per-PID issued_id and completed_id.
+    /// Could cause issues in waiting operaitions and in AsyncXQueue::UpdateMemoryInfo().
     InitScheduler(scheduler_type, policy_type);
     return kXSchedSuccess;
 }

@@ -54,4 +54,24 @@ typedef struct
     NV_STATUS       rmStatus;                             // OUT
 } UVM_HINT_PARAMS;
 
+//
+// UvmQueryPF
+//
+#define UVM_QUERY_PF                                                  UVM_IOCTL_BASE(2000)
+typedef struct
+{
+    NvU64 start;
+    NvU64 end;
+    NvU64 timestamp;
+} UVM_FAULT_INFO;
+
+typedef struct
+{
+    NvU64          sinceTimestampNs NV_ALIGN_BYTES(8); // IN
+    NvU64          rangeCapacity    NV_ALIGN_BYTES(8); // IN
+    NvU64          rangeCount       NV_ALIGN_BYTES(8); // OUT
+    UVM_FAULT_INFO *faultRanges     NV_ALIGN_BYTES(8); // IN/OUT
+    NV_STATUS      rmStatus;                           // OUT
+} UVM_QUERY_PF_PARAMS;
+
 } // namespace xsched::cuda

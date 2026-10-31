@@ -1,13 +1,14 @@
 #pragma once
 
+#include <vector>
 #include <cstring>
 
 #include "xsched/preempt/hal/hw_command.h"
-#include "xsched/cuda/hal/common/dims.h"
 #include "xsched/cuda/hal/common/cuda.h"
 #include "xsched/cuda/hal/common/driver.h"
+#include "xsched/cuda/hal/common/kernel.h"
 #include "xsched/cuda/hal/common/cuda_assert.h"
-#include "xsched/cuda/hal/profile/profile.h"
+#include "xsched/cuda/hal/predict/exec_time.h"
 
 namespace xsched::cuda
 {
@@ -72,19 +73,11 @@ public:
     virtual std::shared_ptr<preempt::MemorySet> GetMemoryContext() override { return mem_ctx_; }
     virtual void Predict(XMemoryContextType ctx, std::shared_ptr<preempt::XMemoryManager> xmm) override;
 
-    void PredictExecutionTime();
-    static void PredictMemoryContextAllocation(CUfunction func, void **params, size_t param_cnt,
-                                               std::shared_ptr<preempt::XMemoryManager> xmm,
-                                               std::shared_ptr<preempt::MemorySet> mem_ctx);
-    static bool PredictMemoryContextHeuristic(
-        CUcontext ctx, CUfunction func, uint64_t pgdim, uint32_t pbdim, void **params,
-        CUfunction func_prev, uint64_t pgdim_prev, uint32_t pbdim_prev, void **params_prev,
-        std::shared_ptr<preempt::MemorySet> mem_ctx);
-
     // After CUDA 12, kFunc could be a CUkernel. We convert CUkernel to CUfunction
     // by calling cuKernelGetFunction, the actual CUfunction is stored in kFuncHandle.
     const CUfunction kFunc;
     const CUfunction kFuncHandle;
+    const KernelNameHash kNameHash;
 
     bool killable = false;
     CUdeviceptr preempt_buffer = 0;
@@ -99,7 +92,7 @@ protected:
     void **extra_ = nullptr;
 
 private:
-    size_t param_cnt_ = 0;
+    std::vector<size_t> param_sizes_;
     char *param_data_ = nullptr;
     char *extra_data_ = nullptr;
     size_t extra_buffer_size_ = 0;
@@ -228,7 +221,7 @@ public:
         , mem_ctx_(std::make_shared<preempt::MemorySet>())
     {
         mem_ctx_->writes.Merge(dstDevice, dstDevice + ByteCount);
-        exec_time_ns_ = Profiler::GetMemcpyExecutionTimeNs(
+        exec_time_ns_ = ExecutionTimePredictor::PredictMemcpy(
             CUPTI_ACTIVITY_MEMCPY_KIND_HTOD, ByteCount
         );
 
@@ -268,12 +261,12 @@ private:
     }
 };
 
-// CUDA_COMMAND(CudaMemcpyHtoDV2Command, CudaMemoryCommand, Driver::MemcpyHtoDAsync_v2, Profiler::GetMemcpyExecutionTimeNs(CUPTI_ACTIVITY_MEMCPY_KIND_HTOD, ByteCount)                   , {mem_ctx_->writes.Merge(dstDevice, dstDevice + ByteCount);                 }, CUdeviceptr, dstDevice, const void *, srcHost, size_t, ByteCount);
-CUDA_COMMAND(CudaMemcpyDtoHV2Command, CudaMemoryCommand, Driver::MemcpyDtoHAsync_v2, Profiler::GetMemcpyExecutionTimeNs(CUPTI_ACTIVITY_MEMCPY_KIND_DTOH, ByteCount)                   , {mem_ctx_->reads.Merge(srcDevice, srcDevice + ByteCount);                  }, void *, dstHost, CUdeviceptr, srcDevice, size_t, ByteCount);
-CUDA_COMMAND(CudaMemcpyDtoDV2Command, CudaMemoryCommand, Driver::MemcpyDtoDAsync_v2, Profiler::GetMemcpyExecutionTimeNs(CUPTI_ACTIVITY_MEMCPY_KIND_DTOD, ByteCount)                   , {mem_ctx_->reads.Merge(srcDevice, srcDevice + ByteCount); mem_ctx_->writes.Merge(dstDevice, dstDevice + ByteCount);}, CUdeviceptr, dstDevice, CUdeviceptr, srcDevice, size_t, ByteCount);
-CUDA_COMMAND(CudaMemsetD8Command    , CudaMemoryCommand, Driver::MemsetD8Async     , Profiler::GetMemsetExecutionTimeNs(CUPTI_ACTIVITY_MEMORY_KIND_DEVICE, sizeof(unsigned char) * N) , {mem_ctx_->writes.Merge(dstDevice, dstDevice + N * sizeof(unsigned char)); }, CUdeviceptr, dstDevice, unsigned char, uc, size_t, N);
-CUDA_COMMAND(CudaMemsetD16Command   , CudaMemoryCommand, Driver::MemsetD16Async    , Profiler::GetMemsetExecutionTimeNs(CUPTI_ACTIVITY_MEMORY_KIND_DEVICE, sizeof(unsigned short) * N), {mem_ctx_->writes.Merge(dstDevice, dstDevice + N * sizeof(unsigned short));}, CUdeviceptr, dstDevice, unsigned short, us, size_t, N);
-CUDA_COMMAND(CudaMemsetD32Command   , CudaMemoryCommand, Driver::MemsetD32Async    , Profiler::GetMemsetExecutionTimeNs(CUPTI_ACTIVITY_MEMORY_KIND_DEVICE, sizeof(unsigned int) * N)  , {mem_ctx_->writes.Merge(dstDevice, dstDevice + N * sizeof(unsigned int));  }, CUdeviceptr, dstDevice, unsigned int, ui, size_t, N);
+// CUDA_COMMAND(CudaMemcpyHtoDV2Command, CudaMemoryCommand, Driver::MemcpyHtoDAsync_v2, ExecutionTimePredictor::PredictMemcpy(CUPTI_ACTIVITY_MEMCPY_KIND_HTOD, ByteCount)                   , {mem_ctx_->writes.Merge(dstDevice, dstDevice + ByteCount);                 }, CUdeviceptr, dstDevice, const void *, srcHost, size_t, ByteCount);
+CUDA_COMMAND(CudaMemcpyDtoHV2Command, CudaMemoryCommand, Driver::MemcpyDtoHAsync_v2, ExecutionTimePredictor::PredictMemcpy(CUPTI_ACTIVITY_MEMCPY_KIND_DTOH, ByteCount)                   , {mem_ctx_->reads.Merge(srcDevice, srcDevice + ByteCount);                  }, void *, dstHost, CUdeviceptr, srcDevice, size_t, ByteCount);
+CUDA_COMMAND(CudaMemcpyDtoDV2Command, CudaMemoryCommand, Driver::MemcpyDtoDAsync_v2, ExecutionTimePredictor::PredictMemcpy(CUPTI_ACTIVITY_MEMCPY_KIND_DTOD, ByteCount)                   , {mem_ctx_->reads.Merge(srcDevice, srcDevice + ByteCount); mem_ctx_->writes.Merge(dstDevice, dstDevice + ByteCount);}, CUdeviceptr, dstDevice, CUdeviceptr, srcDevice, size_t, ByteCount);
+CUDA_COMMAND(CudaMemsetD8Command    , CudaMemoryCommand, Driver::MemsetD8Async     , ExecutionTimePredictor::PredictMemset(CUPTI_ACTIVITY_MEMORY_KIND_DEVICE, sizeof(unsigned char) * N) , {mem_ctx_->writes.Merge(dstDevice, dstDevice + N * sizeof(unsigned char)); }, CUdeviceptr, dstDevice, unsigned char, uc, size_t, N);
+CUDA_COMMAND(CudaMemsetD16Command   , CudaMemoryCommand, Driver::MemsetD16Async    , ExecutionTimePredictor::PredictMemset(CUPTI_ACTIVITY_MEMORY_KIND_DEVICE, sizeof(unsigned short) * N), {mem_ctx_->writes.Merge(dstDevice, dstDevice + N * sizeof(unsigned short));}, CUdeviceptr, dstDevice, unsigned short, us, size_t, N);
+CUDA_COMMAND(CudaMemsetD32Command   , CudaMemoryCommand, Driver::MemsetD32Async    , ExecutionTimePredictor::PredictMemset(CUPTI_ACTIVITY_MEMORY_KIND_DEVICE, sizeof(unsigned int) * N)  , {mem_ctx_->writes.Merge(dstDevice, dstDevice + N * sizeof(unsigned int));  }, CUdeviceptr, dstDevice, unsigned int, ui, size_t, N);
 CUDA_COMMAND(CudaMemsetD2D8Command  , CudaMemoryCommand, Driver::MemsetD2D8Async   , -1, {}, CUdeviceptr, dstDevice, size_t, dstPitch, unsigned char, uc, size_t, Width, size_t, Height);
 CUDA_COMMAND(CudaMemsetD2D16Command , CudaMemoryCommand, Driver::MemsetD2D16Async  , -1, {}, CUdeviceptr, dstDevice, size_t, dstPitch, unsigned short, us, size_t, Width, size_t, Height);
 CUDA_COMMAND(CudaMemsetD2D32Command , CudaMemoryCommand, Driver::MemsetD2D32Async  , -1, {}, CUdeviceptr, dstDevice, size_t, dstPitch, unsigned int, ui, size_t, Width, size_t, Height);

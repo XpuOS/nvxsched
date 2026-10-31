@@ -75,12 +75,14 @@ static const std::map<XPolicyType, std::string> &PolicyNames() {
 
 static const std::map<XMemoryContextType, std::string> &MemoryContextNames() {
     static const std::map<XMemoryContextType, std::string> kMemoryContextNames {
-        { kMemoryContextUnknown            , XSCHED_UNKNOWN_NAME                             },
-        { kMemoryContextNone               , XSCHED_MEMORY_CONTEXT_NAME_NONE                 },
-        { kMemoryContextFull               , XSCHED_MEMORY_CONTEXT_NAME_FULL                 },
-        { kMemoryContextAllocation         , XSCHED_MEMORY_CONTEXT_NAME_ALLOCATION           },
-        { kMemoryContextHeuristic          , XSCHED_MEMORY_CONTEXT_NAME_HEURISTIC            },
-        { kMemoryContextHeuristicAllocation, XSCHED_MEMORY_CONTEXT_NAME_HEURISTIC_ALLOCATION },
+        { kMemoryContextUnknown          , XSCHED_UNKNOWN_NAME                             },
+        { kMemoryContextNone             , XSCHED_MEMORY_CONTEXT_NAME_NONE                 },
+        { kMemoryContextAllocation       , XSCHED_MEMORY_CONTEXT_NAME_ALLOCATION           },
+        { kMemoryContextBuffer           , XSCHED_MEMORY_CONTEXT_NAME_BUFFER               },
+        { kMemoryContextFault            , XSCHED_MEMORY_CONTEXT_NAME_FAULT                },
+        { kMemoryContextTemplate         , XSCHED_MEMORY_CONTEXT_NAME_TEMPLATE             },
+        { kMemoryContextTemplateAndBuffer, XSCHED_MEMORY_CONTEXT_NAME_TEMPLATE_AND_BUFFER  },
+        { kMemoryContextTemplateAndFault , XSCHED_MEMORY_CONTEXT_NAME_TEMPLATE_AND_FAULT   },
     };
     return kMemoryContextNames;
 }

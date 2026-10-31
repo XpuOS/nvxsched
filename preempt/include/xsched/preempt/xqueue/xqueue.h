@@ -33,8 +33,15 @@ public:
     virtual XQueueState Query() = 0;
     virtual int64_t GetHwCommandCount() = 0;
 
-    virtual void Suspend(int64_t flags) = 0;
-    virtual void Resume(int64_t flags) = 0;
+    /// @brief Suspend an XQueue and pause its execution.
+    /// @param flags Suspending behavior flags, see XQueueSuspendFlag.
+    /// @return true if successfully suspended, false if it is already suspended or terminated.
+    virtual bool Suspend(int64_t flags) = 0;
+
+    /// @brief Resume an XQueue and continue its execution.
+    /// @param flags Resuming behavior flags, see XQueueResumeFlag.
+    /// @return true if successfully resumed, false if it is already resumed.
+    virtual bool Resume(int64_t flags) = 0;
 
     /// @brief Advise the memory context, i.e., memory regions accessed by the XQueue,
     /// within the given period of time.
@@ -43,6 +50,12 @@ public:
     /// @param end_ns The ending time of the period in nanoseconds,
     /// Use UINT64_MAX to indicate the maximum known access time.
     virtual void AdviseMemory(XMemoryAdviseType advise, uint64_t begin_ns, uint64_t end_ns) = 0;
+
+    /// @brief Update the memory information of the XQueue.
+    /// A scheduling operation can suspend multiple XQueues,
+    /// called after all given XQueues are suspended in a scheduling operation.
+    /// @param operation_id The id of the scheduling operation.
+    virtual void UpdateMemoryInfo(uint64_t operation_id) = 0;
 
     /// @brief Set the preempt level of the XQueue. NOT thread-safe, make sure there is
     /// NO other operations on the XQueue when calling this function.

@@ -100,8 +100,9 @@ inline void *RealDlSym(void *handle, const char *name)
         return symbol;                                                          \
     }
 
-#define DEFINE_CHECK_SYMBOL_FUNC(func, env_name, search_names, search_dirs)     \
-    static bool func(const char *symbol_name)                                   \
+// Could return nullptr if not found.
+#define DEFINE_FIND_SYMBOL_FUNC(func, env_name, search_names, search_dirs)      \
+    static void *func(const char *symbol_name)                                  \
     {                                                                           \
         static const std::vector<std::string> names = search_names;             \
         static const std::vector<std::string> dirs = search_dirs;               \
@@ -109,7 +110,7 @@ inline void *RealDlSym(void *handle, const char *name)
         static void *dll_handle = dlopen(dll_path.c_str(), XSCHED_RTLD_FLAGS);  \
         XASSERT(dll_handle != nullptr, "fail to dlopen %s", dll_path.c_str());  \
         void *symbol = RealDlSym(dll_handle, symbol_name);                      \
-        return symbol != nullptr; \
+        return symbol;                                                          \
     }
 
 #elif defined(_WIN32)
@@ -142,8 +143,8 @@ inline void *RealDlSym(void *handle, const char *name)
         return (void*)symbol;                                                       \
     }
 
-#define DEFINE_CHECK_SYMBOL_FUNC(func, env_name, search_names, search_dirs)         \
-    static bool func(const char *symbol_name)                                       \
+#define DEFINE_FIND_SYMBOL_FUNC(func, env_name, search_names, search_dirs)          \
+    static void *func(const char *symbol_name)                                      \
     {                                                                               \
         static const std::vector<std::string> names = search_names;                 \
         static const std::vector<std::string> dirs = search_dirs;                   \
@@ -151,7 +152,7 @@ inline void *RealDlSym(void *handle, const char *name)
         static HMODULE dll_handle = LoadLibraryA(dll_path.c_str());                 \
         XASSERT(dll_handle != nullptr, "fail to LoadLibrary %s", dll_path.c_str()); \
         FARPROC symbol = GetProcAddress(dll_handle, symbol_name);                   \
-        return symbol != nullptr;                                                   \
+        return (void*)symbol;                                                       \
     }
 
 #endif

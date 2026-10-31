@@ -9,8 +9,10 @@
 #include "xsched/utils/common.h"
 #include "xsched/utils/region.h"
 
-#define UVM_PAGE_SIZE   0x200000ULL
-// #define UVM_PAGE_SIZE   0x1000ULL
+#ifndef UVM_PAGE_SIZE
+    #define UVM_PAGE_SIZE   0x200000ULL // 2MB block size
+    // #define UVM_PAGE_SIZE   0x1000ULL
+#endif
 
 namespace xsched::cuda
 {
@@ -102,40 +104,40 @@ private:
     const uint32_t kPrevBBim;
 };
 
-// Relation between memory access and kernel parameters
+// Mapping between memory access and kernel parameters
 
-enum RelationType
+enum MappingType
 {
-    kRelationUnknown                                         = 0,
-    kRelationExactBeginFixedSize                             = 1,
-    kRelationExactBeginLinearSize                            = 2,
-    kRelationExactBeginMultipliedSize                        = 3,
-    kRelationExactEndFixedSize                               = 4,
-    kRelationExactBeginFixedSizeFixedStrideFixedCount        = 5,
-    kRelationExactBeginFixedSizeExact3DStrideExact3DCount    = 6,
-    kRelationExactBeginLinearSizeFixedStrideFixedCount       = 7,
-    kRelationExactBeginLinearSizeLinear3DStrideLinear3DCount = 8,
+    kMappingUnknown                                         = 0,
+    kMappingExactBeginFixedSize                             = 1,
+    kMappingExactBeginLinearSize                            = 2,
+    kMappingExactBeginMultipliedSize                        = 3,
+    kMappingExactEndFixedSize                               = 4,
+    kMappingExactBeginFixedSizeFixedStrideFixedCount        = 5,
+    kMappingExactBeginFixedSizeExact3DStrideExact3DCount    = 6,
+    kMappingExactBeginLinearSizeFixedStrideFixedCount       = 7,
+    kMappingExactBeginLinearSizeLinear3DStrideLinear3DCount = 8,
 };
 
-class AccessRelation
+class AccessMapping
 {
 public:
-    AccessRelation(RelationType type) : kType(type) {}
-    virtual ~AccessRelation() = default;
+    AccessMapping(MappingType type) : kType(type) {}
+    virtual ~AccessMapping() = default;
     virtual void MergeRegion(utils::Region &region, uint64_t kernel_name_hash_prev,
         uint64_t pgdim_prev, uint32_t pbdim_prev, void **params_prev, void **params_cur) = 0;
     
-    static std::unique_ptr<AccessRelation> Create(Json::Value &relation);
+    static std::unique_ptr<AccessMapping> Create(Json::Value &mapping);
 
 protected:
-    const RelationType kType;
+    const MappingType kType;
 };
 
-class ExactBeginFixedSizeRelation : public AccessRelation
+class ExactBeginFixedSizeMapping : public AccessMapping
 {
 public:
-    ExactBeginFixedSizeRelation(Json::Value &relation);
-    virtual ~ExactBeginFixedSizeRelation() = default;
+    ExactBeginFixedSizeMapping(Json::Value &mapping);
+    virtual ~ExactBeginFixedSizeMapping() = default;
     virtual void MergeRegion(utils::Region &region, uint64_t hash_prev,
         uint64_t pgdim_prev, uint32_t pbdim_prev, void **params_prev, void **params_cur) override
     {
@@ -151,11 +153,11 @@ private:
     size_t size_ = 0;
 };
 
-class ExactBeginLinearSizeRelation : public AccessRelation
+class ExactBeginLinearSizeMapping : public AccessMapping
 {
 public:
-    ExactBeginLinearSizeRelation(Json::Value &relation);
-    virtual ~ExactBeginLinearSizeRelation() = default;
+    ExactBeginLinearSizeMapping(Json::Value &mapping);
+    virtual ~ExactBeginLinearSizeMapping() = default;
     virtual void MergeRegion(utils::Region &region, uint64_t hash_prev,
         uint64_t pgdim_prev, uint32_t pbdim_prev, void **params_prev, void **params_cur) override
     {
@@ -174,11 +176,11 @@ private:
     double size_multiplier_ = 0;
 };
 
-class ExactBeginMultipliedSizeRelation : public AccessRelation
+class ExactBeginMultipliedSizeMapping : public AccessMapping
 {
 public:
-    ExactBeginMultipliedSizeRelation(Json::Value &relation);
-    virtual ~ExactBeginMultipliedSizeRelation() = default;
+    ExactBeginMultipliedSizeMapping(Json::Value &mapping);
+    virtual ~ExactBeginMultipliedSizeMapping() = default;
     virtual void MergeRegion(utils::Region &region, uint64_t hash_prev,
         uint64_t pgdim_prev, uint32_t pbdim_prev, void **params_prev, void **params_cur) override
     {
@@ -199,11 +201,11 @@ private:
     double size_multiplier_ = 0;
 };
 
-class ExactEndFixedSizeRelation : public AccessRelation
+class ExactEndFixedSizeMapping : public AccessMapping
 {
 public:
-    ExactEndFixedSizeRelation(Json::Value &relation);
-    virtual ~ExactEndFixedSizeRelation() = default;
+    ExactEndFixedSizeMapping(Json::Value &mapping);
+    virtual ~ExactEndFixedSizeMapping() = default;
     virtual void MergeRegion(utils::Region &region, uint64_t hash_prev,
         uint64_t pgdim_prev, uint32_t pbdim_prev, void **params_prev, void **params_cur) override
     {
@@ -219,11 +221,11 @@ private:
     size_t size_ = 0;
 };
 
-class ExactBeginFixedSizeFixedStrideFixedCountRelation : public AccessRelation
+class ExactBeginFixedSizeFixedStrideFixedCountMapping : public AccessMapping
 {
 public:
-    ExactBeginFixedSizeFixedStrideFixedCountRelation(Json::Value &relation);
-    virtual ~ExactBeginFixedSizeFixedStrideFixedCountRelation() = default;
+    ExactBeginFixedSizeFixedStrideFixedCountMapping(Json::Value &mapping);
+    virtual ~ExactBeginFixedSizeFixedStrideFixedCountMapping() = default;
     virtual void MergeRegion(utils::Region &region, uint64_t hash_prev,
         uint64_t pgdim_prev, uint32_t pbdim_prev, void **params_prev, void **params_cur) override;
 
@@ -234,11 +236,11 @@ private:
     size_t count_ = 0;
 };
 
-class ExactBeginFixedSizeExact3DStrideExact3DCountRelation : public AccessRelation
+class ExactBeginFixedSizeExact3DStrideExact3DCountMapping : public AccessMapping
 {
 public:
-    ExactBeginFixedSizeExact3DStrideExact3DCountRelation(Json::Value &relation);
-    virtual ~ExactBeginFixedSizeExact3DStrideExact3DCountRelation() = default;
+    ExactBeginFixedSizeExact3DStrideExact3DCountMapping(Json::Value &mapping);
+    virtual ~ExactBeginFixedSizeExact3DStrideExact3DCountMapping() = default;
     virtual void MergeRegion(utils::Region &region, uint64_t hash_prev,
         uint64_t pgdim_prev, uint32_t pbdim_prev, void **params_prev, void **params_cur) override;
 
@@ -249,11 +251,11 @@ private:
     std::unique_ptr<IntReference> counts_[3] = {nullptr, nullptr, nullptr};
 };
 
-class ExactBeginLinearSizeFixedStrideFixedCountRelation : public AccessRelation
+class ExactBeginLinearSizeFixedStrideFixedCountMapping : public AccessMapping
 {
 public:
-    ExactBeginLinearSizeFixedStrideFixedCountRelation(Json::Value &relation);
-    virtual ~ExactBeginLinearSizeFixedStrideFixedCountRelation() = default;
+    ExactBeginLinearSizeFixedStrideFixedCountMapping(Json::Value &mapping);
+    virtual ~ExactBeginLinearSizeFixedStrideFixedCountMapping() = default;
     virtual void MergeRegion(utils::Region &region, uint64_t hash_prev,
         uint64_t pgdim_prev, uint32_t pbdim_prev, void **params_prev, void **params_cur) override;
 
@@ -265,11 +267,11 @@ private:
     size_t count_ = 0;
 };
 
-class ExactBeginLinearSizeLinear3DStrideLinear3DCountRelation : public AccessRelation
+class ExactBeginLinearSizeLinear3DStrideLinear3DCountMapping : public AccessMapping
 {
 public:
-    ExactBeginLinearSizeLinear3DStrideLinear3DCountRelation(Json::Value &relation);
-    virtual ~ExactBeginLinearSizeLinear3DStrideLinear3DCountRelation() = default;
+    ExactBeginLinearSizeLinear3DStrideLinear3DCountMapping(Json::Value &mapping);
+    virtual ~ExactBeginLinearSizeLinear3DStrideLinear3DCountMapping() = default;
     virtual void MergeRegion(utils::Region &region, uint64_t hash_prev,
         uint64_t pgdim_prev, uint32_t pbdim_prev, void **params_prev, void **params_cur) override;
 

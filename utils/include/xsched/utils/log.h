@@ -55,6 +55,15 @@ inline int GetLogLevel()
     return level;
 }
 
+inline bool DebugLogEnabled()
+{
+#ifdef RELEASE_MODE
+    return false;
+#else
+    return GetLogLevel() >= LOG_LEVEL_DEBG;
+#endif
+}
+
 inline void GetLocalTime(const time_t tt, std::tm &lt)
 {
 #if defined(_WIN32)

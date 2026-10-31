@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "xsched/preempt/xmem/xmem.h"
 #include "xsched/preempt/hal/hw_mem.h"
 #include "xsched/cuda/hal/common/cuda.h"
@@ -39,10 +41,21 @@ public:
     virtual void *AllocatePagable(std::shared_ptr<preempt::HwMemoryRequest> req) override;
     virtual void Free(void *ptr) override;
     virtual void Advise(std::shared_ptr<utils::Region> mem, XMemoryAdviseType advise) override;
+    virtual void UpdateMemoryInfo() override;
+    virtual void OnContextTypeChange(XMemoryContextType type) override;
 
 private:
     void Hint(uint64_t begin, uint64_t end);
     void PrefetchH2D(uint64_t begin, uint64_t end, bool sync);
+
+    struct PageFaultRange
+    {
+        uint64_t begin;
+        uint64_t end;
+        uint64_t last_fault_service_timestamp_ns;
+    };
+
+    bool QueryPageFaultRecords(uint64_t since_timestamp_ns, std::vector<PageFaultRange> &records);
 
     int uvm_fd_ = -1;
     CUcontext context_;
@@ -51,6 +64,7 @@ private:
 
     static std::mutex g_cuda_xmm_mtx_;
     static std::map<CUcontext, std::shared_ptr<preempt::XMemoryManager>> g_cuda_xmms_;
+
 };
 
 } // namespace xsched::cuda

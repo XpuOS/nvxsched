@@ -675,10 +675,16 @@ private:
     DEFINE_GET_SYMBOL_FUNC(GetSymbol, XSCHED_CUPTI_LIB_ENV_NAME,
                            std::vector<std::string>({"cupti64_129.dll"}), // FIXME: add more versions
                            std::vector<std::string>({}));
+    DEFINE_FIND_SYMBOL_FUNC(FindSymbol, XSCHED_CUPTI_LIB_ENV_NAME,
+                            std::vector<std::string>({"cupti64_129.dll"}),
+                            std::vector<std::string>({}));
 #elif defined(__linux__)
     DEFINE_GET_SYMBOL_FUNC(GetSymbol, XSCHED_CUPTI_LIB_ENV_NAME,
                            std::vector<std::string>({"libcupti.so"}),
                            std::vector<std::string>({}));
+    DEFINE_FIND_SYMBOL_FUNC(FindSymbol, XSCHED_CUPTI_LIB_ENV_NAME,
+                            std::vector<std::string>({"libcupti.so"}),
+                            std::vector<std::string>({}));
 #endif
 
 public:
@@ -775,6 +781,17 @@ public:
     DEFINE_STATIC_ADDRESS_CALL(GetSymbol("cuptiActivityEnableLaunchAttributes"), CUptiResult, ActivityEnableLaunchAttributes, uint8_t, enable);
     DEFINE_STATIC_ADDRESS_CALL(GetSymbol("cuptiActivityRegisterTimestampCallback"), CUptiResult, ActivityRegisterTimestampCallback, CUpti_TimestampCallbackFunc, funcTimestamp);
 
+    static inline CUptiResult ActivityEnableHWTrace(uint8_t enable)
+    {
+        using FuncPtr = CUptiResult (*)(uint8_t);
+        static const auto func_ptr = reinterpret_cast<FuncPtr>(FindSymbol("cuptiActivityEnableHWTrace"));
+        if (func_ptr == nullptr) {
+            XWARN("cuptiActivityEnableHWTrace() is not supported in this version of CUPTI");
+            return CUPTI_ERROR_NOT_SUPPORTED;
+        }
+        XDEBG("call cuptiActivityEnableHWTrace() @ %p", func_ptr);
+        return func_ptr(enable);
+    }
 };
 
 } // namespace xsched::cuda

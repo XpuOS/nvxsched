@@ -26,6 +26,7 @@ AsyncXQueue::AsyncXQueue(std::shared_ptr<HwQueue> hwq, XPreemptLevel level,
     auto wait_cmd = cmd_buf_->EnqueueXQueueWaitAllCommand();
     wait_cmd->Wait();
     kHwQueue->OnPreemptLevelChange(level_);
+    if (xmm_ != nullptr) xmm_->OnContextTypeChange(mem_ctx_type_);
     SchedAgent::SendEvent(std::make_shared<XQueueCreateEvent>(kHandle, kDevice, level,
                                                               threshold, batch_size));
 }
@@ -90,14 +91,14 @@ int64_t AsyncXQueue::GetHwCommandCount()
     return next_hw_cmd_idx_.load() - 1;
 }
 
-void AsyncXQueue::Suspend(int64_t flags)
+bool AsyncXQueue::Suspend(int64_t flags)
 {
     // If the XQueue is already terminated, it should not be suspended.
-    if (terminated_.load()) return;
+    if (terminated_.load()) return false;
 
     // Will not suspend if it is already suspended.
     bool expected = false;
-    if (!suspended_.compare_exchange_strong(expected, true)) return;
+    if (!suspended_.compare_exchange_strong(expected, true)) return false;
 
     if (flags & kQueueSuspendFlagWaitIdle) {
         // Wait for all HwCommands to be completed,
@@ -112,19 +113,21 @@ void AsyncXQueue::Suspend(int64_t flags)
     if (level_ >= kPreemptLevelDeactivate) kHwQueue->Deactivate();
     if (level_ >= kPreemptLevelInterrupt)  kHwQueue->Interrupt();
     if (flags & kQueueSuspendFlagSyncHwQueue) kHwQueue->Synchronize();
+
+    return true;
 }
 
-void AsyncXQueue::Resume(int64_t flags)
+bool AsyncXQueue::Resume(int64_t flags)
 {
     // Will not resume if it is not suspended.
     bool expected = true;
-    if (!suspended_.compare_exchange_strong(expected, false)) return;
+    if (!suspended_.compare_exchange_strong(expected, false)) return false;
 
     if (level_ == kPreemptLevelBlock) {
         // Should not clear the command log because when the XQueue is suspended without
         // synchronization, the HwCommand may be still running when resumes.
         launch_worker_->Resume();
-        return;
+        return true;
     }
 
     // synchronization should be done in HwQueue::Reactivate.
@@ -134,7 +137,7 @@ void AsyncXQueue::Resume(int64_t flags)
         if (level_ >= kPreemptLevelInterrupt)  kHwQueue->Restore(log);
         if (level_ >= kPreemptLevelDeactivate) kHwQueue->Reactivate(log);
         launch_worker_->Resume();
-        return;
+        return true;
     }
 
     // Restore and reactivate the hal queue with an empty command log.
@@ -149,6 +152,7 @@ void AsyncXQueue::Resume(int64_t flags)
     // Here drop_idx is the idx of the last HwCommand submitted.
     int64_t drop_idx = next_hw_cmd_idx_.load() - 1;
     launch_worker_->ResumeAndDrop(drop_idx);
+    return true;
 }
 
 std::shared_ptr<MemorySet> AsyncXQueue::GetMemoryContext(uint64_t begin_ns, uint64_t end_ns)
@@ -206,7 +210,7 @@ void AsyncXQueue::AdviseMemory(XMemoryAdviseType advise, uint64_t begin_ns, uint
     if (mem_ctx_type_ <= kMemoryContextNone) return;
 
     std::shared_ptr<Region> mem = xmm_->GetAllocatedMemory();
-    if (mem_ctx_type_ == kMemoryContextFull) {
+    if (mem_ctx_type_ == kMemoryContextAllocation) {
         // Use full memory allocation as context.
         xmm_->Advise(mem, advise);
         return;
@@ -218,6 +222,15 @@ void AsyncXQueue::AdviseMemory(XMemoryAdviseType advise, uint64_t begin_ns, uint
     region.Merge(ctx->writes);
     mem->Intersect(region);
     xmm_->Advise(mem, advise);
+}
+
+void AsyncXQueue::UpdateMemoryInfo(uint64_t operation_id)
+{
+    if (xmm_ == nullptr) return;
+    if (mem_ctx_type_ == kMemoryContextFault ||
+        mem_ctx_type_ == kMemoryContextTemplateAndFault) {
+        xmm_->UpdateMemoryInfo(operation_id);
+    }
 }
 
 void AsyncXQueue::SetPreemptLevel(XPreemptLevel level)
@@ -252,6 +265,7 @@ void AsyncXQueue::SetMemoryContextType(XMemoryContextType ctx_type)
     // TODO: change to thread-safe
     this->WaitAll();
     mem_ctx_type_ = ctx_type;
+    if (xmm_ != nullptr) xmm_->OnContextTypeChange(mem_ctx_type_);
 }
 
 void AsyncXQueue::SetLaunchConfig(int64_t threshold, int64_t batch_size)

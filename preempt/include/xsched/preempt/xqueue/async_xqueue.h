@@ -27,11 +27,12 @@ public:
     virtual XQueueState Query() override;
     virtual int64_t GetHwCommandCount() override;
 
-    virtual void Suspend(int64_t flags) override;
-    virtual void Resume(int64_t flags) override;
+    virtual bool Suspend(int64_t flags) override;
+    virtual bool Resume(int64_t flags) override;
 
     std::shared_ptr<MemorySet> GetMemoryContext(uint64_t begin_ns, uint64_t end_ns);
     virtual void AdviseMemory(XMemoryAdviseType adv, uint64_t begin_ns, uint64_t end_ns) override;
+    virtual void UpdateMemoryInfo(uint64_t operation_id) override;
 
     virtual void SetPreemptLevel(XPreemptLevel level) override;
     virtual void SetMemoryContextType(XMemoryContextType ctx_type) override;

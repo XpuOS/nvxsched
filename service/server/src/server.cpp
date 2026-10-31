@@ -197,8 +197,11 @@ void Server::Execute(std::shared_ptr<const Operation> operation)
     std::shared_ptr<ipc::Node> client_chan = it->second;
     chan_mtx_.unlock();
 
-    XASSERT(client_chan->Send(operation->Data(), operation->Size()),
-            "cannot send operation to client process " FMT_PID, client_pid);
+    // A client may remove its IPC queue before its destroy event reaches us.
+    // The process waiter will clean up its pending scheduler state.
+    if (!client_chan->Send(operation->Data(), operation->Size())) {
+        XWARN("fail to send operation to client process " FMT_PID, client_pid);
+    }
 }
 
 XQueueHandle Server::GetXQueueHandle(const Json::Value &request)

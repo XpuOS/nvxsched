@@ -67,14 +67,25 @@ void SchedExecutor::ExecuteSchedOperation(std::shared_ptr<const sched::SchedOper
       | (GetEnvOption(XSCHED_SCHEDULER_SUSPEND_WAIT_IDLE_ENV_NAME, false)
             ? kQueueSuspendFlagWaitIdle    : kQueueSuspendFlagNone);
 
+    // Resume all running XQueues first.
     for (size_t i = 0; i < running_cnt; ++i) {
         std::shared_ptr<XQueue> xq_shptr = XQueueManager::Get(handles[i]);
         // It is possible that the XQueue has been destroyed because the operation is asynchronous.
         if (xq_shptr != nullptr) xq_shptr->Resume(kQueueResumeFlagNone);
     }
+
+    // Suspend XQueues.
+    std::list<std::shared_ptr<XQueue>> suspended_xqs;
     for (size_t i = 0; i < suspended_cnt; ++i) {
         std::shared_ptr<XQueue> xq_shptr = XQueueManager::Get(handles[running_cnt + i]);
-        if (xq_shptr != nullptr) xq_shptr->Suspend(suspend_flags);
+        if (xq_shptr == nullptr) continue;
+        bool success = xq_shptr->Suspend(suspend_flags);
+        if (success) suspended_xqs.emplace_back(xq_shptr);
+    }
+
+    // Update memory info for suspended XQueues.
+    for (const auto &xq_shptr : suspended_xqs) {
+        xq_shptr->UpdateMemoryInfo(op->Id());
     }
 }
 

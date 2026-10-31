@@ -1,269 +1,154 @@
-<p align="center">
-  <img src="./docs/img/xsched-logo-v.png" alt="xsched project logo" width="200"/>
-</p>
+# NVXSched: Compute and Memory Scheduling for NVIDIA GPUs
 
-# XSched: Preemptive Scheduling for Diverse XPUs
-
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue)](https://github.com/XpuOS/xsched/blob/main/LICENSE)
-
-
----
-
-## Latest News
-
-- [2026/06] XSched supports CUDA Graph (compatible with TSG-based Level-3 preemption).
-- [2026/06] XSched adds support for CoreX ([Iluvatar](https://www.iluvatar.com/)) GPUs.
-- [2025/08] We migrated XSched to Windows and completed validation on CUDA, LevelZero, and OpenCL.
-- [2025/07] We integrated XSched into [llama.cpp](integration/llama.cpp) and [NVIDIA Triton](integration/triton) to enable priority-based scheduling between multiple inference requests.
-- [2025/07] We presented our XSched paper at [OSDI 2025](https://www.usenix.org/conference/osdi25/presentation/shen-weihang) and prepared several interesting demo videos: [Ascend910](https://github.com/user-attachments/assets/bc668f4d-33d9-4492-9900-8c3b10fdd1af), [GV100](https://github.com/user-attachments/assets/dffb821b-92e2-44c5-bd59-a6946b0c4d02), [Least-Laxity-First](https://github.com/user-attachments/assets/885886e1-1920-4fb1-aa2d-50f4f88cf660), and [Active-Window-First](https://github.com/user-attachments/assets/877aeb5f-35b6-4bc1-b553-d76525a8adb3).
-- [2025/06] We officially released XSched! Check out our [blog post](docs/xsched-intro-2025-en.md).
-
-
----
-
-
-## Demos
-XSched eliminates video stuttering in AI video conference applications on AI PCs
-
-- Hardware: [Intel Core Ultra NPU](https://www.intel.com/content/www/us/en/products/details/processors/core-ultra.html) (i.e., NPU 3720)
-- Workloads: fake-background-webcam ([LFBW](https://github.com/fangfufu/Linux-Fake-Background-Webcam)) and speech-to-text ([whisper.cpp](https://github.com/ggml-org/whisper.cpp))
-- Scheduling policy: a variant of [least-laxity-first](https://ieeexplore.ieee.org/document/726348) policy
-
-For more details, please see the 2nd case study in our [paper](docs/xsched-osdi25.pdf).
-
-https://github.com/user-attachments/assets/3eb256c3-9107-4d8b-ae8d-0e3ada54aec1
-
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue)](LICENSE)
 
 ## About
 
-XSched is a preemptive scheduling framework for diverse XPUs (referring to various accelerators, such as GPUs, NPUs, ASICs, and FPGAs) across different brands, generations, and software platforms. XSched provides unified interfaces for scheduling XPU tasks through a preemptible command queue abstraction (XQueue), enabling hardware-agnostic, flexible scheduling policies for various objectives. XSched introduces a multi-level hardware model that helps advanced XPUs achieve optimal scheduling performance while maintaining compatibility with emerging XPUs. The framework is designed to efficiently schedule XPU tasks while remaining transparent to existing XPU-based applications. 
+NVXSched brings flexible multitasking to NVIDIA GPUs.
+Built on [XSched](docs/xsched-osdi25.pdf), it combines **preemptive compute scheduling** with **proactive memory scheduling**, so applications can share a GPU even when their combined memory demands exceed its capacity.
+Existing CUDA applications run without source code changes, while users can choose scheduling policies to match their priorities and performance needs.
 
+Compared with CUDA Unified Memory's demand paging, NVXSched proactively prepares the incoming task's working set at each context switch, rather than relying on costly page faults during execution.
+It predicts upcoming memory accesses using queued GPU commands and the execution schedule, then uses these predictions to guide eviction and load the working set before the task resumes.
 
 ### Features
 
 - **Transparency**: Works with existing applications without code changes.
-- **Flexibility**: Supports diverse scheduling policies and accelerator types.
-- **Extensibility**: Accommodates new hardware features and software platforms.
-- **Integration**: Adapts to both OS-level and system-level multitasking scenarios.
-- **Performance**: Delivers high scheduling performance with minimal runtime overhead.
-
-
-## XPU Support Matrix
-
-✅ supported and implemented
-
-❌ not supported
-
-🔘 not yet implemented
-
-🚧 implementation within progress
-
-<table>
-  <tr>
-    <th align="center">Platform</th>
-    <th align="center">XPU</th>
-    <th align="center">Shim</th>
-    <th align="center">Level-1</th>
-    <th align="center">Level-2</th>
-    <th align="center">Level-3</th>
-  </tr>
-  <tr>
-    <td align="center" rowspan="4"><a href="platforms/cuda">CUDA</a></td>
-    <td align="center">NVIDIA Ampere GPUs (sm86)</td>
-    <td align="center" rowspan="4">✅</td>
-    <td align="center" rowspan="4">✅</td>
-    <td align="center">🚧</td>
-    <td align="center">🚧</td>
-  </tr>
-  <tr>
-    <td align="center">NVIDIA Volta GPUs (sm70)</td>
-    <td align="center">✅</td>
-    <td align="center">✅</td>
-  </tr>
-  <tr>
-    <td align="center">NVIDIA Kepler GPUs (sm35)</td>
-    <td align="center">✅</td>
-    <td align="center">❌</td>
-  </tr>
-  <tr>
-    <td align="center">Other NVIDIA GPUs</td>
-    <td align="center">🔘</td>
-    <td align="center">🔘</td>
-  </tr>
-  <tr>
-    <td align="center" rowspan="1"><a href="platforms/corex">CoreX</a></td>
-    <td align="center">CoreX GPUs</td>
-    <td align="center" rowspan="1">✅</td>
-    <td align="center" rowspan="1">✅</td>
-    <td align="center">🔘</td>
-    <td align="center">❌</td>
-  </tr>
-  <tr>
-    <td align="center" rowspan="1"><a href="platforms/hip">HIP</a></td>
-    <td align="center">AMD GPUs</td>
-    <td align="center" rowspan="1">✅</td>
-    <td align="center" rowspan="1">✅</td>
-    <td align="center">🔘</td>
-    <td align="center">🔘</td>
-  </tr>
-  <tr>
-    <td align="center" rowspan="2"><a href="platforms/levelzero">LevelZero</a></td>
-    <td align="center">Intel GPUs</td>
-    <td align="center" rowspan="2">✅</td>
-    <td align="center" rowspan="2">✅</td>
-    <td align="center">🔘</td>
-    <td align="center">🔘</td>
-  </tr>
-  <tr>
-    <td align="center">Intel Integrated NPUs</td>
-    <td align="center">✅</td>
-    <td align="center">❌</td>
-  </tr>
-  <tr>
-    <td align="center" rowspan="4"><a href="platforms/opencl">OpenCL</a></td>
-    <td align="center">NVIDIA GPUs</td>
-    <td align="center" rowspan="4">✅</td>
-    <td align="center" rowspan="4">✅</td>
-    <td align="center">🔘</td>
-    <td align="center">🔘</td>
-  </tr>
-  <tr>
-    <td align="center">AMD GPUs</td>
-    <td align="center">🔘</td>
-    <td align="center">🔘</td>
-  </tr>
-  <tr>
-    <td align="center">Intel GPUs</td>
-    <td align="center">🔘</td>
-    <td align="center">🔘</td>
-  </tr>
-  <tr>
-    <td align="center">Xilinx FPGAs</td>
-    <td align="center">🔘</td>
-    <td align="center">❌</td>
-  </tr>
-  <tr>
-    <td align="center" rowspan="1"><a href="platforms/ascend">AscendCL</a></td>
-    <td align="center">Ascend NPUs</td>
-    <td align="center" rowspan="1">✅</td>
-    <td align="center" rowspan="1">✅</td>
-    <td align="center">🔘</td>
-    <td align="center">❌</td>
-  </tr>
-  <tr>
-    <td align="center" rowspan="1"><a href="platforms/cudla">cuDLA</a></td>
-    <td align="center">NVIDIA DLA</td>
-    <td align="center" rowspan="1">✅</td>
-    <td align="center" rowspan="1">✅</td>
-    <td align="center">❌</td>
-    <td align="center">❌</td>
-  </tr>
-  <tr>
-    <td align="center" rowspan="2"><a href="platforms/vpi">VPI</a></td>
-    <td align="center">NVIDIA OFA</td>
-    <td align="center" rowspan="2">✅</td>
-    <td align="center" rowspan="2">✅</td>
-    <td align="center">❌</td>
-    <td align="center">❌</td>
-  </tr>
-  <tr>
-    <td align="center">NVIDIA PVA</td>
-    <td align="center">❌</td>
-    <td align="center">❌</td>
-  </tr>
-</table>
-
+- **Preemptive compute scheduling**: Preempts running GPU tasks and switches between them to improve responsiveness and fairness.
+Supports diverse scheduling policies.
+- **Memory oversubscription:** Share GPU memory across applications whose combined memory footprint exceeds device capacity.
+- **Predictive memory management:** Combine offline access templates with runtime page fault feedback to predict memory aceesses and coordinate page migration with task execution.
 
 ## Getting Started
 
-### Build and Install XSched
+### Build and Install
 
-#### Clone
+Requirements:
+
+- CMake
+- A C++20 compiler (GCC recommended)
+- NVIDIA driver package: kernel modules (`nvidia.ko`, `nvidia_uvm.ko`, `nvidia_modeset.ko`, `nvidia_drm.ko`) and CUDA driver (`libcuda.so`)
+- CUPTI (`libcupti.so`)
+
+Run the following commands from the project root:
 
 ```bash
-git clone https://github.com/XpuOS/xsched.git
-cd xsched
 git submodule update --init --recursive
+
+# Build the CUDA HAL, shim, execution-time profiler, and scheduling service.
+# The default installation directory is output/ under the project root.
+make cuda
+
+# install to a custom path
+make cuda INSTALL_PATH=/path/to/install
 ```
 
-#### Build and Install
+Supported NVIDIA driver versions:
+
+| Driver Version | KMD Branch |
+| -------------- | ---------- |
+| 580.95.05 | `msched-580.95.05` |
+
+We are adding support for more driver versions.
+
+Check the **driver version** with `nvidia-smi` and substitute it for `<KMD_VERSION>` below:
 
 ```bash
-# build XSched only
-# XSched will be installed to xsched/output by default
-make
-# install XSched to a custom path
-make INSTALL_PATH=/path/to/install
-
-# build XSched along with platform-specific components (HAL, Shim, etc.)
-make cuda # or corex, hip, levelzero, opencl, ascend, cudla, vpi
-# or specify PLATFORM
-make PLATFORM=cuda
-make PLATFORM="cuda levelzero opencl" # build multiple platforms at once
+nvidia-smi
+cd 3rdparty/nvidia-kmd
+git checkout msched-<KMD_VERSION>
+make -j"$(nproc)"
+sudo make msched
+cd ../..
 ```
-
 
 ### Use Cases
 
-#### Transparently Schedule Applications
+#### Transparently Schedule CUDA Applications
 
-XSched is designed to be transparent to applications. By setting a few [environment variables](protocol/README.md), you can schedule your application with XSched.
-See our example ([Linux](examples/Linux/1_transparent_sched/README.md), [Windows](examples/Windows/1_transparent_sched/README.md)) for transparent scheduling.
+NVXSched is designed to be transparent to applications.
+By loading the CUDA shim and setting a few [environment variables](protocol/README.md), you can schedule existing CUDA applications without modifying their source code.
+For scheduling across processes, `xserver` coordinates the applications and `xcli` lets you monitor queues or adjust the policy through scheduling hints.
+See the [CUDA usage guide](platforms/cuda/README.md#usage) and [service guide](service/README.md) for details.
 
-#### Linking with XSched for Customized Scheduling
+#### Combined Compute and Memory Scheduling
 
-You can also explicitly link with XSched and use XQueue APIs & Hint APIs in your application for more flexibility.
-See our examples for more details:
+When applications need more memory than the GPU can hold, NVXSched uses host memory to hold pages that are not needed immediately.
+At each context switch, it predicts the incoming task's working set and uses the execution schedule to guide which pages to populated and evict.
+See [memory scheduling](platforms/cuda/README.md#run-with-memory-scheduling) for configuration and [profiling](platforms/cuda/README.md#profiling) for preparing prediction data.
 
-- give hints ([Linux](examples/Linux/2_give_hints/README.md), [Windows](examples/Windows/2_give_hints/README.md))
-- intra-process scheduling ([Linux](examples/Linux/3_intra_process_sched/README.md), [Windows](examples/Windows/3_intra_process_sched/README.md))
-- manual scheduling ([Linux](examples/Linux/4_manual_sched/README.md), [Windows](examples/Windows/4_manual_sched/cuda/README.md))
-- non-transparent scheduling ([Linux](examples/Linux/8_nontransparent_sched/README.md), [Windows](examples/Windows/8_nontransparent_sched/cuda/README.md))
+#### Customize Scheduling
 
-#### More Examples
+Applications that need direct control can link with NVXSched to manage XQueues or provide hints to the scheduling policy.
+See the [API guide](include/README.md) and the examples for [giving hints](examples/Linux/2_give_hints/README.md), [intra-process scheduling](examples/Linux/3_intra_process_sched/README.md), and [manual scheduling](examples/Linux/4_manual_sched/README.md).
 
-Check out our [example list](examples/README.md) for more advanced use cases.
-
+To implement a new scheduling policy, see the [policy guide](sched/README.md#how-to-implement-your-own-policy).
+The [example list](examples/README.md) includes additional XSched compute scheduling and application integration examples.
 
 ## Architecture and Workflow
 
-<img src="/docs/img/xsched-framework.png" alt="XSched framework" width="600" />
+NVXSched builds on XSched's preemptible command queue abstraction, XQueue, and extends it with predictions of upcoming memory accesses.
+The scheduler uses these predictions together with its execution plan to coordinate compute and memory scheduling.
+The CUDA shim, XPreempt, and CUDA HAL run in each application process, while `xserver` coordinates decisions across processes:
 
-XSched consists of four key components: XPU shim (XShim), XPU task preemption module (XPreempt), XPU hardware adapter layer (XAL), and an XScheduler. XShim, XPreempt, and XAL are dynamically linked libraries preloaded into each XPU application process, while XScheduler runs as a central scheduling service.
+- **[CUDA shim](platforms/cuda):** intercepts CUDA API calls and redirects commands to XQueues, allowing existing applications to use NVXSched transparently. It also redirects device allocations to managed memory for oversubscription.
+- **[XPreempt](preempt):** implements XQueue interfaces for command submission, waiting, suspension, and resumption, and constructs memory contexts. A memory context describes the regions predicted to be accessed by commands within a given execution period.
+- **[CUDA HAL](platforms/cuda):** implements GPU preemption and predicts command execution times and memory accesses. It combines access templates with page fault feedback to account for both static and dynamic accesses.
+- **[Scheduler](sched):** decides which XQueues may run according to the selected policy. For memory scheduling, the policy also publishes the upcoming execution order and timeslices to guide memory preparation.
+- **[Memory manager](platforms/cuda/README.md#driver-interfaces):** works with the modified NVIDIA UVM driver to prioritize pages for upcoming tasks and migrate their working sets to the GPU.
 
-- **XShim:** named as `shim` in the code, intercepts XPU driver API calls and redirects commands to the XQueue ①, allowing applications to run on XSched without modifications (transparency).
-- **[XPreempt](preempt):** named as `preempt` in the code, implements XQueue interfaces based on the multi-level hardware model ②. Contains an [agent](preempt/src/sched/agent.cpp) that watches the state of XQueue (e.g., ready or idle) and generates scheduling events to notify the XScheduler via IPC ③. Also responsible for applying the scheduling operations (e.g., suspend or resume an XQueue) received from the XScheduler ⑤.
-- **XAL:** named as `hal` in the code, implements the multi-level hardware model interfaces by calling XPU driver APIs.
-- **[XScheduler](service/server):** named as `xserver` in the code, coordinates all XQueues from different processes, monitors global XQueue status through agent-reported events ③, and invokes the scheduling policy to make decisions when status changes. Decisions are enforced by sending scheduling operations to agents ④. The policy is modular and customizable to suit various workloads.
-- **[XCLI](service/cli):** a command-line tool that can monitor XQueue status, change the policy, or give scheduling hints (e.g., priority) ⑥.
+When an application submits a command to an XQueue, NVXSched predicts its memory accesses and execution time.
+At a context switch, the scheduler suspends outgoing tasks and uses the upcoming execution order and timeslices to identify working sets.
+It then updates page eviction priorities and requests migration of the incoming working sets before resuming those tasks.
+Page faults observed during execution feed back into predictions for subsequent commands, helping cover accesses that earlier predictions missed.
 
+## Documentation
+
+| Guide | Contents |
+| ----- | -------- |
+| [CUDA](platforms/cuda/README.md) | Running applications, profiling, and memory prediction |
+| [XPreempt](preempt/README.md) | Command queues and memory contexts |
+| [Scheduling](sched/README.md) | Scheduling policies and how to add a policy |
+| [Configuration](protocol/README.md) | Environment variables and their defaults |
+| [Public APIs](include/README.md) | Queue control, scheduling hints, and memory advice |
+| [Service](service/README.md) | Using `xserver` and `xcli` |
+| [Platform adapters](platforms/README.md) | Hardware abstraction and API interception |
+
+The [XSched introduction](docs/xsched-intro-2025-en.md) and its [Chinese version](docs/xsched-intro-2025-zh.md) describe the underlying compute scheduling framework.
 
 ## Development Plan
 
-We will continue to support XSched on more OSes and platforms, and improve the performance of XSched. Please stay tuned!
+We will continue to improve NVXSched's scheduling capabilities and support more NVIDIA GPUs and driver versions. Please stay tuned!
 
-- [x] Integrated into LLM serving systems (e.g., llama.cpp, vLLM)
-- [x] Support Windows
-- [ ] Support MacOS
-- [ ] Install as system daemon
-
+- [ ] Support spatial multiplexing to schedule GPU tasks running concurrently.
+- [ ] Extend memory scheduling to more scheduling policies.
+- [ ] Support more NVIDIA driver versions.
 
 ## Contributing
 
-XSched is designed to be extensible and flexible.
-
+NVXSched is designed to be extensible and flexible.
 We welcome contributions:
 
-- Support more platforms, or a higher preemption level on existing platforms. See [guide](platforms/example/README.md)
-- Implement a new scheduling policy. See [guide](sched/README.md)
-- Integrate XSched into AI-powered applications. 
-- Report or fix issues.
-
+- Implement a new scheduling policy or extend an existing policy with memory scheduling. See the [guide](sched/README.md).
+- Improve memory access prediction, GPU preemption, or driver support. See the [CUDA guide](platforms/cuda/README.md).
+- Integrate NVXSched into GPU applications and inference systems.
+- Report or fix issues, and improve documentation and examples.
 
 ## Citation
 
-If you use XSched for your research, please cite our [paper](docs/xsched-osdi25.pdf):
-```bibtex    
+If you use NVXSched for your research, please cite our papers:
+
+```bibtex
+@misc{Shen2026msched,
+  title={Towards Fully-fledged GPU Multitasking via Proactive Memory Scheduling},
+  author={Weihang Shen and Yinqiu Chen and Rong Chen and Haibo Chen},
+  year={2026},
+  eprint={2512.24637},
+  archivePrefix={arXiv},
+  primaryClass={cs.OS},
+  url={https://arxiv.org/abs/2512.24637},
+}
+
 @inproceedings{Shen2025xsched,
   title = {{XSched}: Preemptive Scheduling for Diverse {XPU}s},
   author = {Weihang Shen and Mingcong Han and Jialong Liu and Rong Chen and Haibo Chen},
@@ -278,9 +163,7 @@ If you use XSched for your research, please cite our [paper](docs/xsched-osdi25.
 }
 ```
 
-The artifacts of XSched are published on [Github](https://github.com/XpuOS/xsched-artifacts) and [Zenodo](https://doi.org/10.5281/zenodo.15327992).
-
 ## Contact Us
 
-- For technical questions and feature requests, please submit via GitHub [Issues](https://github.com/XpuOS/xsched/issues)
-- For collaborations and partnerships, please reach out at [rongchen@sjtu.edu.cn](mailto:rongchen@sjtu.edu.cn)
+- For technical questions and feature requests, please submit via GitHub [Issues](https://github.com/XpuOS/nvxsched/issues).
+- For collaborations and partnerships, please reach out at [rongchen@sjtu.edu.cn](mailto:rongchen@sjtu.edu.cn).

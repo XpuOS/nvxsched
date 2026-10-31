@@ -16,3 +16,6 @@
 [submodule "3rdparty/ipc"]
 	path = 3rdparty/ipc
 	url = https://github.com/XpuOS/ipc.git
+[submodule "3rdparty/nvidia-kmd"]
+	path = 3rdparty/nvidia-kmd
+	url = https://github.com/XpuOS/nvidia-kmd.git

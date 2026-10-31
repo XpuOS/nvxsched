@@ -99,12 +99,14 @@ typedef enum {
 } XSchedulerType;
 
 typedef enum {
-    kMemoryContextUnknown             = 0,
-    kMemoryContextNone                = 1, // no memory context
-    kMemoryContextFull                = 2, // treat all memory as memory context
-    kMemoryContextAllocation          = 3, // find allocated buffers pointed by command arguments
-    kMemoryContextHeuristic           = 4, // predict memory context based on heuristic rules
-    kMemoryContextHeuristicAllocation = 5, // heuristic rules first, fallback to allocation if failed
+    kMemoryContextUnknown           = 0,
+    kMemoryContextNone              = 1, // no memory context
+    kMemoryContextAllocation        = 2, // treat all allocated memory as memory context
+    kMemoryContextBuffer            = 3, // find allocated buffers pointed by command arguments
+    kMemoryContextFault             = 4, // fault-driven prediction only
+    kMemoryContextTemplate          = 5, // predict memory context using parameter-access mappings
+    kMemoryContextTemplateAndBuffer = 6, // template first, buffer if no mapping is found
+    kMemoryContextTemplateAndFault  = 7, // template supplemented by fault history
     kMemoryContextMax,
 } XMemoryContextType;
 

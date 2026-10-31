@@ -26,6 +26,19 @@ void XMemoryManager::Advise(std::shared_ptr<utils::Region> mem, XMemoryAdviseTyp
     hw_mm_->Advise(mem, advise);
 }
 
+void XMemoryManager::UpdateMemoryInfo(uint64_t operation_id)
+{
+    std::lock_guard<std::mutex> lock(update_mtx_);
+    if (operation_id <= last_update_operation_id_) return;
+    last_update_operation_id_ = operation_id;
+    hw_mm_->UpdateMemoryInfo();
+}
+
+void XMemoryManager::OnContextTypeChange(XMemoryContextType type)
+{
+    hw_mm_->OnContextTypeChange(type);
+}
+
 size_t XMemoryManager::GetTotalAllocatedSize()
 {
     size_t total_size = 0;

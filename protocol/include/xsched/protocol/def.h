@@ -1,13 +1,13 @@
 #pragma once
 
 #define XSCHED_DEFAULT_PREEMPT_LEVEL              kPreemptLevelBlock
-#define XSCHED_DEFAULT_MEMORY_CONTEXT_TYPE        kMemoryContextFull
+#define XSCHED_DEFAULT_MEMORY_CONTEXT_TYPE        kMemoryContextAllocation
 #define XSCHED_DEFAULT_COMMAND_THRESHOLD          16
 #define XSCHED_DEFAULT_COMMAND_BATCH_SIZE         8
 
 #define XSCHED_AUTO_XQUEUE_ENV_NAME                "XSCHED_AUTO_XQUEUE"                // = str[ON/OFF]      , default = OFF
 #define XSCHED_AUTO_XQUEUE_LEVEL_ENV_NAME          "XSCHED_AUTO_XQUEUE_LEVEL"          // = int[1, 3]        , default = 1
-#define XSCHED_AUTO_XQUEUE_MEMORY_CONTEXT_ENV_NAME "XSCHED_AUTO_XQUEUE_MEMORY_CONTEXT" // = str[NONE/FULL/ALOC/HEUR/HEUR_ALOC], default = FULL
+#define XSCHED_AUTO_XQUEUE_MEMORY_CONTEXT_ENV_NAME "XSCHED_AUTO_XQUEUE_MEMORY_CONTEXT" // = str[NONE/ALLOCATION/BUFFER/FAULT/TEMPLATE/TEMPLATE_AND_BUFFER/TEMPLATE_AND_FAULT], default = ALLOCATION
 #define XSCHED_AUTO_XQUEUE_THRESHOLD_ENV_NAME      "XSCHED_AUTO_XQUEUE_THRESHOLD"      // = int[1, max_int64], default = 16
 #define XSCHED_AUTO_XQUEUE_BATCH_SIZE_ENV_NAME     "XSCHED_AUTO_XQUEUE_BATCH_SIZE"     // = int[1, threshold], default = 8
 #define XSCHED_AUTO_XQUEUE_PRIORITY_ENV_NAME       "XSCHED_AUTO_XQUEUE_PRIORITY"       // = int[-256, 255]   , default = 0
@@ -17,12 +17,14 @@
 #define XSCHED_AUTO_XQUEUE_KDEADLINE_ENV_NAME      "XSCHED_AUTO_XQUEUE_KDEADLINE"      // = int[1, max_int64]
 #define XSCHED_AUTO_XQUEUE_LAXITY_ENV_NAME         "XSCHED_AUTO_XQUEUE_LAXITY"         // = int[1, max_int64]
 
-#define XSCHED_MEMORY_CONTEXT_NAME_NONE                 "NONE" // no memory context
-#define XSCHED_MEMORY_CONTEXT_NAME_FULL                 "FULL" // treat all memory as memory context
-#define XSCHED_MEMORY_CONTEXT_NAME_ALLOCATION           "ALOC" // find allocated buffers pointed by command arguments
-#define XSCHED_MEMORY_CONTEXT_NAME_HEURISTIC            "HEUR" // predict memory context based on heuristic rules
-#define XSCHED_MEMORY_CONTEXT_NAME_HEURISTIC_ALLOCATION "HEUR_ALOC" // heuristic rules first, fallback to allocation if failed
-#define XSCHED_MEMORY_CONTEXT_HEURISTIC_FILE_ENV_NAME   "XSCHED_MEMORY_CONTEXT_HEURISTIC_FILE" // = str, default = memory_context.json
+#define XSCHED_MEMORY_CONTEXT_NAME_NONE                "NONE" // no memory context
+#define XSCHED_MEMORY_CONTEXT_NAME_ALLOCATION          "ALLOCATION" // all allocated memory
+#define XSCHED_MEMORY_CONTEXT_NAME_BUFFER              "BUFFER" // buffers pointed by command arguments
+#define XSCHED_MEMORY_CONTEXT_NAME_FAULT               "FAULT" // fault-driven prediction only
+#define XSCHED_MEMORY_CONTEXT_NAME_TEMPLATE            "TEMPLATE" // parameter-access mappings
+#define XSCHED_MEMORY_CONTEXT_NAME_TEMPLATE_AND_BUFFER "TEMPLATE_AND_BUFFER" // buffer if no mapping is found
+#define XSCHED_MEMORY_CONTEXT_NAME_TEMPLATE_AND_FAULT  "TEMPLATE_AND_FAULT" // template supplemented by faults
+#define XSCHED_MEMORY_CONTEXT_TEMPLATE_FILE_ENV_NAME   "XSCHED_MEMORY_CONTEXT_TEMPLATE_FILE" // = str, default = memory_context.json
 
 #define XSCHED_EXECUTION_TIME_FILE_ENV_NAME          "XSCHED_EXECUTION_TIME_FILE" // = str, default = execution_time.json
 #define XSCHED_EXECUTION_TIME_WARMUP_COUNT_ENV_NAME  "XSCHED_EXECUTION_TIME_WARMUP_COUNT"  // = int[0, max_int64], default = 1000, warmup count

@@ -13,7 +13,7 @@
 #include "xsched/utils/common.h"
 #include "xsched/preempt/xmem/xmem.h"
 #include "xsched/cuda/profile/profile.h"
-#include "xsched/cuda/hal/common/dims.h"
+#include "xsched/cuda/hal/common/kernel.h"
 #include "xsched/cuda/hal/common/cuda_assert.h"
 
 namespace xsched::cuda

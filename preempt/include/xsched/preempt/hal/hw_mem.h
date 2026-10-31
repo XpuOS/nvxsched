@@ -32,6 +32,8 @@ public:
         UNUSED(mem);
         UNUSED(advise);
     }
+    virtual void UpdateMemoryInfo() {}
+    virtual void OnContextTypeChange(XMemoryContextType type) { UNUSED(type); }
 };
 
 } // namespace xsched::preempt

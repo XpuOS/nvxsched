@@ -4,8 +4,8 @@
 
 #include "xsched/utils/hash.h"
 #include "xsched/utils/xassert.h"
-#include "xsched/cuda/hal/common/dims.h"
-#include "xsched/cuda/hal/profile/relation.h"
+#include "xsched/cuda/hal/common/kernel.h"
+#include "xsched/cuda/hal/predict/mapping.h"
 
 using namespace xsched::cuda;
 using namespace xsched::utils;
@@ -31,79 +31,79 @@ std::unique_ptr<IntReference> IntReference::Create(const Json::Value &ref)
     }
 }
 
-std::unique_ptr<AccessRelation> AccessRelation::Create(Json::Value &relation)
+std::unique_ptr<AccessMapping> AccessMapping::Create(Json::Value &mapping)
 {
-    XASSERT(relation.isMember("type") && relation["type"].isString(), "type should be a string");
-    if (relation["type"] == "EXACT_BEGIN_FIXED_SIZE") {
-        return std::make_unique<ExactBeginFixedSizeRelation>(relation);
-    } else if (relation["type"] == "EXACT_BEGIN_LINEAR_SIZE") {
-        return std::make_unique<ExactBeginLinearSizeRelation>(relation);
-    } else if (relation["type"] == "EXACT_BEGIN_MULTIPLIED_SIZE") {
-        return std::make_unique<ExactBeginMultipliedSizeRelation>(relation);
-    } else if (relation["type"] == "EXACT_END_FIXED_SIZE") {
-        return std::make_unique<ExactEndFixedSizeRelation>(relation);
-    } else if (relation["type"] == "EXACT_BEGIN_FIXED_SIZE_FIXED_STRIDE_FIXED_COUNT") {
-        return std::make_unique<ExactBeginFixedSizeFixedStrideFixedCountRelation>(relation);
-    } else if (relation["type"] == "EXACT_BEGIN_FIXED_SIZE_EXACT_3D_STRIDE_EXACT_3D_COUNT") {
-        return std::make_unique<ExactBeginFixedSizeExact3DStrideExact3DCountRelation>(relation);
-    } else if (relation["type"] == "EXACT_BEGIN_LINEAR_SIZE_FIXED_STRIDE_FIXED_COUNT") {
-        return std::make_unique<ExactBeginLinearSizeFixedStrideFixedCountRelation>(relation);
-    } else if (relation["type"] == "EXACT_BEGIN_LINEAR_SIZE_LINEAR_3D_STRIDE_LINEAR_3D_COUNT") {
-        return std::make_unique<ExactBeginLinearSizeLinear3DStrideLinear3DCountRelation>(relation);
+    XASSERT(mapping.isMember("type") && mapping["type"].isString(), "type should be a string");
+    if (mapping["type"] == "EXACT_BEGIN_FIXED_SIZE") {
+        return std::make_unique<ExactBeginFixedSizeMapping>(mapping);
+    } else if (mapping["type"] == "EXACT_BEGIN_LINEAR_SIZE") {
+        return std::make_unique<ExactBeginLinearSizeMapping>(mapping);
+    } else if (mapping["type"] == "EXACT_BEGIN_MULTIPLIED_SIZE") {
+        return std::make_unique<ExactBeginMultipliedSizeMapping>(mapping);
+    } else if (mapping["type"] == "EXACT_END_FIXED_SIZE") {
+        return std::make_unique<ExactEndFixedSizeMapping>(mapping);
+    } else if (mapping["type"] == "EXACT_BEGIN_FIXED_SIZE_FIXED_STRIDE_FIXED_COUNT") {
+        return std::make_unique<ExactBeginFixedSizeFixedStrideFixedCountMapping>(mapping);
+    } else if (mapping["type"] == "EXACT_BEGIN_FIXED_SIZE_EXACT_3D_STRIDE_EXACT_3D_COUNT") {
+        return std::make_unique<ExactBeginFixedSizeExact3DStrideExact3DCountMapping>(mapping);
+    } else if (mapping["type"] == "EXACT_BEGIN_LINEAR_SIZE_FIXED_STRIDE_FIXED_COUNT") {
+        return std::make_unique<ExactBeginLinearSizeFixedStrideFixedCountMapping>(mapping);
+    } else if (mapping["type"] == "EXACT_BEGIN_LINEAR_SIZE_LINEAR_3D_STRIDE_LINEAR_3D_COUNT") {
+        return std::make_unique<ExactBeginLinearSizeLinear3DStrideLinear3DCountMapping>(mapping);
     }
 
-    XERRO("unknown relation type: %s", relation["type"].asString().c_str());
+    XERRO("unknown mapping type: %s", mapping["type"].asString().c_str());
     return nullptr;
 }
 
-ExactBeginFixedSizeRelation::ExactBeginFixedSizeRelation(Json::Value &relation)
-    : AccessRelation(kRelationExactBeginFixedSize)
+ExactBeginFixedSizeMapping::ExactBeginFixedSizeMapping(Json::Value &mapping)
+    : AccessMapping(kMappingExactBeginFixedSize)
 {
-    relation["begin"]["size"] = sizeof(void *);
-    begin_ref_ = IntReference::Create(relation["begin"]);
-    size_ = relation["size"].asUInt64();
+    mapping["begin"]["size"] = sizeof(void *);
+    begin_ref_ = IntReference::Create(mapping["begin"]);
+    size_ = mapping["size"].asUInt64();
 }
 
-ExactBeginLinearSizeRelation::ExactBeginLinearSizeRelation(Json::Value &relation)
-    : AccessRelation(kRelationExactBeginLinearSize)
+ExactBeginLinearSizeMapping::ExactBeginLinearSizeMapping(Json::Value &mapping)
+    : AccessMapping(kMappingExactBeginLinearSize)
 {
-    relation["begin"]["size"] = sizeof(void *);
-    begin_ref_ = IntReference::Create(relation["begin"]);
-    size_ref_ = IntReference::Create(relation["size"]);
-    size_multiplier_ = relation["size"]["multiplier"].asDouble();
+    mapping["begin"]["size"] = sizeof(void *);
+    begin_ref_ = IntReference::Create(mapping["begin"]);
+    size_ref_ = IntReference::Create(mapping["size"]);
+    size_multiplier_ = mapping["size"]["multiplier"].asDouble();
 }
 
-ExactBeginMultipliedSizeRelation::ExactBeginMultipliedSizeRelation(Json::Value &relation)
-    : AccessRelation(kRelationExactBeginMultipliedSize)
+ExactBeginMultipliedSizeMapping::ExactBeginMultipliedSizeMapping(Json::Value &mapping)
+    : AccessMapping(kMappingExactBeginMultipliedSize)
 {
-    relation["begin"]["size"] = sizeof(void *);
-    begin_ref_ = IntReference::Create(relation["begin"]);
-    size_multiplier_ = relation["size"]["multiplier"].asDouble();
-    for (auto &multiplier : relation["size"]["multipliers"]) {
+    mapping["begin"]["size"] = sizeof(void *);
+    begin_ref_ = IntReference::Create(mapping["begin"]);
+    size_multiplier_ = mapping["size"]["multiplier"].asDouble();
+    for (auto &multiplier : mapping["size"]["multipliers"]) {
         size_refs_.push_back(IntReference::Create(multiplier));
     }
 }
 
-ExactEndFixedSizeRelation::ExactEndFixedSizeRelation(Json::Value &relation)
-    : AccessRelation(kRelationExactEndFixedSize)
+ExactEndFixedSizeMapping::ExactEndFixedSizeMapping(Json::Value &mapping)
+    : AccessMapping(kMappingExactEndFixedSize)
 {
-    relation["end"]["size"] = sizeof(void *);
-    end_ref_ = IntReference::Create(relation["end"]);
-    size_ = relation["size"].asUInt64();
+    mapping["end"]["size"] = sizeof(void *);
+    end_ref_ = IntReference::Create(mapping["end"]);
+    size_ = mapping["size"].asUInt64();
 }
 
-ExactBeginFixedSizeFixedStrideFixedCountRelation::
-ExactBeginFixedSizeFixedStrideFixedCountRelation(Json::Value &relation)
-    : AccessRelation(kRelationExactBeginFixedSizeFixedStrideFixedCount)
+ExactBeginFixedSizeFixedStrideFixedCountMapping::
+ExactBeginFixedSizeFixedStrideFixedCountMapping(Json::Value &mapping)
+    : AccessMapping(kMappingExactBeginFixedSizeFixedStrideFixedCount)
 {
-    relation["begin"]["size"] = sizeof(void *);
-    begin_ref_ = IntReference::Create(relation["begin"]);
-    size_ = relation["size"].asUInt64();
-    stride_ = relation["stride"].asUInt64();
-    count_ = relation["count"].asUInt64();
+    mapping["begin"]["size"] = sizeof(void *);
+    begin_ref_ = IntReference::Create(mapping["begin"]);
+    size_ = mapping["size"].asUInt64();
+    stride_ = mapping["stride"].asUInt64();
+    count_ = mapping["count"].asUInt64();
 }
 
-void ExactBeginFixedSizeFixedStrideFixedCountRelation::
+void ExactBeginFixedSizeFixedStrideFixedCountMapping::
 MergeRegion(utils::Region &region, uint64_t hash_prev, uint64_t pgdim_prev, uint32_t pbdim_prev,
             void **params_prev, void **params_cur)
 {
@@ -116,20 +116,20 @@ MergeRegion(utils::Region &region, uint64_t hash_prev, uint64_t pgdim_prev, uint
     }
 }
 
-ExactBeginFixedSizeExact3DStrideExact3DCountRelation::
-ExactBeginFixedSizeExact3DStrideExact3DCountRelation(Json::Value &relation)
-    : AccessRelation(kRelationExactBeginFixedSizeExact3DStrideExact3DCount)
+ExactBeginFixedSizeExact3DStrideExact3DCountMapping::
+ExactBeginFixedSizeExact3DStrideExact3DCountMapping(Json::Value &mapping)
+    : AccessMapping(kMappingExactBeginFixedSizeExact3DStrideExact3DCount)
 {
-    relation["begin"]["size"] = sizeof(void *);
-    begin_ref_ = IntReference::Create(relation["begin"]);
-    size_ = relation["size"].asUInt64();
+    mapping["begin"]["size"] = sizeof(void *);
+    begin_ref_ = IntReference::Create(mapping["begin"]);
+    size_ = mapping["size"].asUInt64();
     for (int i = 0; i < 3; i++) {
-        strides_[i] = IntReference::Create(relation["stride"][i]);
-        counts_[i] = IntReference::Create(relation["count"][i]);
+        strides_[i] = IntReference::Create(mapping["stride"][i]);
+        counts_[i] = IntReference::Create(mapping["count"][i]);
     }
 }
 
-void ExactBeginFixedSizeExact3DStrideExact3DCountRelation::
+void ExactBeginFixedSizeExact3DStrideExact3DCountMapping::
 MergeRegion(utils::Region &region, uint64_t hash_prev, uint64_t pgdim_prev, uint32_t pbdim_prev,
             void **params_prev, void **params_cur)
 {
@@ -164,19 +164,19 @@ MergeRegion(utils::Region &region, uint64_t hash_prev, uint64_t pgdim_prev, uint
     }
 }
 
-ExactBeginLinearSizeFixedStrideFixedCountRelation::
-ExactBeginLinearSizeFixedStrideFixedCountRelation(Json::Value &relation)
-    : AccessRelation(kRelationExactBeginLinearSizeFixedStrideFixedCount)
+ExactBeginLinearSizeFixedStrideFixedCountMapping::
+ExactBeginLinearSizeFixedStrideFixedCountMapping(Json::Value &mapping)
+    : AccessMapping(kMappingExactBeginLinearSizeFixedStrideFixedCount)
 {
-    relation["begin"]["size"] = sizeof(void *);
-    begin_ref_ = IntReference::Create(relation["begin"]);
-    size_ref_ = IntReference::Create(relation["size"]);
-    size_multiplier_ = relation["size"]["multiplier"].asDouble();
-    stride_ = relation["stride"].asUInt64();
-    count_ = relation["count"].asUInt64();
+    mapping["begin"]["size"] = sizeof(void *);
+    begin_ref_ = IntReference::Create(mapping["begin"]);
+    size_ref_ = IntReference::Create(mapping["size"]);
+    size_multiplier_ = mapping["size"]["multiplier"].asDouble();
+    stride_ = mapping["stride"].asUInt64();
+    count_ = mapping["count"].asUInt64();
 }
 
-void ExactBeginLinearSizeFixedStrideFixedCountRelation::
+void ExactBeginLinearSizeFixedStrideFixedCountMapping::
 MergeRegion(utils::Region &region, uint64_t hash_prev, uint64_t pgdim_prev, uint32_t pbdim_prev,
             void **params_prev, void **params_cur)
 {
@@ -191,23 +191,23 @@ MergeRegion(utils::Region &region, uint64_t hash_prev, uint64_t pgdim_prev, uint
     }
 }
 
-ExactBeginLinearSizeLinear3DStrideLinear3DCountRelation::
-ExactBeginLinearSizeLinear3DStrideLinear3DCountRelation(Json::Value &relation)
-    : AccessRelation(kRelationExactBeginLinearSizeLinear3DStrideLinear3DCount)
+ExactBeginLinearSizeLinear3DStrideLinear3DCountMapping::
+ExactBeginLinearSizeLinear3DStrideLinear3DCountMapping(Json::Value &mapping)
+    : AccessMapping(kMappingExactBeginLinearSizeLinear3DStrideLinear3DCount)
 {
-    relation["begin"]["size"] = sizeof(void *);
-    begin_ref_ = IntReference::Create(relation["begin"]);
-    size_ref_ = IntReference::Create(relation["size"]);
-    size_multiplier_ = relation["size"]["multiplier"].asDouble();
+    mapping["begin"]["size"] = sizeof(void *);
+    begin_ref_ = IntReference::Create(mapping["begin"]);
+    size_ref_ = IntReference::Create(mapping["size"]);
+    size_multiplier_ = mapping["size"]["multiplier"].asDouble();
     for (int i = 0; i < 3; i++) {
-        strides_[i] = IntReference::Create(relation["stride"][i]);
-        counts_[i] = IntReference::Create(relation["count"][i]);
-        strides_multipliers_[i] = relation["stride"][i]["multiplier"].asDouble();
-        counts_multipliers_[i] = relation["count"][i]["multiplier"].asDouble();
+        strides_[i] = IntReference::Create(mapping["stride"][i]);
+        counts_[i] = IntReference::Create(mapping["count"][i]);
+        strides_multipliers_[i] = mapping["stride"][i]["multiplier"].asDouble();
+        counts_multipliers_[i] = mapping["count"][i]["multiplier"].asDouble();
     }
 }
 
-void ExactBeginLinearSizeLinear3DStrideLinear3DCountRelation::
+void ExactBeginLinearSizeLinear3DStrideLinear3DCountMapping::
 MergeRegion(utils::Region &region, uint64_t hash_prev, uint64_t pgdim_prev, uint32_t pbdim_prev,
             void **params_prev, void **params_cur)
 {

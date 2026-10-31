@@ -97,13 +97,15 @@ class XSchedulerType(IntEnum):
 
 
 class XMemoryContextType(IntEnum):
-    kMemoryContextUnknown             = 0
-    kMemoryContextNone                = 1
-    kMemoryContextFull                = 2
-    kMemoryContextAllocation          = 3
-    kMemoryContextHeuristic           = 4
-    kMemoryContextHeuristicAllocation = 5
-    kMemoryContextMax                 = 6
+    kMemoryContextUnknown           = 0
+    kMemoryContextNone              = 1
+    kMemoryContextAllocation        = 2
+    kMemoryContextBuffer            = 3
+    kMemoryContextFault             = 4
+    kMemoryContextTemplate          = 5
+    kMemoryContextTemplateAndBuffer = 6
+    kMemoryContextTemplateAndFault  = 7
+    kMemoryContextMax               = 8
 
 
 class XMemoryAdviseType(IntEnum):
